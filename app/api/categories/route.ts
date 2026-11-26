@@ -3,10 +3,12 @@ import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { badRequest, unauthorized } from "@/lib/api";
 import type { EntryKind } from "@/generated/prisma/client";
+import { shapeArchivable } from "@/lib/archive";
 
 function parseKind(raw: string | null): EntryKind | null {
   return raw === "EARNING" || raw === "EXPENSE" ? raw : null;
 }
+
 
 /** GET /api/categories?kind=EXPENSE&includeArchived=1 */
 export async function GET(req: NextRequest) {
@@ -21,13 +23,13 @@ export async function GET(req: NextRequest) {
     where: {
       userId: user.sub,
       ...(kind ? { kind } : {}),
-      ...(includeArchived ? {} : { archived: false }),
+      ...(includeArchived ? {} : { archivedAt: null }),
     },
     include: { _count: { select: { entries: true } } },
     orderBy: [{ kind: "asc" }, { name: "asc" }],
   });
 
-  return NextResponse.json({ categories });
+  return NextResponse.json({ categories: categories.map(shapeArchivable) });
 }
 
 /** POST /api/categories */
@@ -62,5 +64,5 @@ export async function POST(req: NextRequest) {
     include: { _count: { select: { entries: true } } },
   });
 
-  return NextResponse.json({ category }, { status: 201 });
+  return NextResponse.json({ category: shapeArchivable(category) }, { status: 201 });
 }

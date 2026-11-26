@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { badRequest, unauthorized } from "@/lib/api";
 import { pesosToCents } from "@/lib/money";
 import { isYmd, manilaDayStartUTC, manilaRangeUTC } from "@/lib/date";
+import { scopeFilter } from "@/lib/archive";
 import type { EntryKind } from "@/generated/prisma/client";
 
 const ENTRY_INCLUDE = {
@@ -33,6 +34,8 @@ export async function GET(req: NextRequest) {
   const entries = await prisma.entry.findMany({
     where: {
       userId: user.sub,
+      // Archived entries are hidden unless explicitly asked for.
+      ...scopeFilter(searchParams.get("include")),
       ...(kind ? { kind } : {}),
       ...(walletId ? { walletId } : {}),
       ...(isYmd(from) && isYmd(to) ? { date: manilaRangeUTC(from, to) } : {}),

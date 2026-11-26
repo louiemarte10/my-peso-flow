@@ -181,13 +181,10 @@ export default function WalletsPage() {
   }
 
   function requestRemoveWallet(w: Wallet) {
-    const used = w.movementCount > 0;
     setConfirm({
-      title: used ? `Archive "${w.name}"` : `Delete "${w.name}"`,
-      message: used
-        ? `${w.movementCount} movement${w.movementCount === 1 ? "" : "s"} are filed against this wallet, so it will be archived instead of deleted. Its history stays intact and it stops appearing on the encode forms.`
-        : "This wallet has no movements yet, so it will be deleted.",
-      confirmLabel: used ? "Archive" : "Delete",
+      title: `Archive "${w.name}"`,
+      message: `This wallet stops appearing on the encode forms and drops out of your totals. Its ${w.movementCount} movement${w.movementCount === 1 ? "" : "s"} stay intact, and you can restore it or delete it for good from the Archived page.`,
+      confirmLabel: "Archive",
       danger: true,
       onConfirm: async () => {
         setConfirmLoading(true);
@@ -280,9 +277,9 @@ export default function WalletsPage() {
 
   function requestDeleteTransfer(t: Transfer) {
     setConfirm({
-      title: "Delete this move",
-      message: `Remove the ${formatPeso(t.amountCents)} move from ${t.fromWallet.name} to ${t.toWallet.name} on ${longDayLabel(ymdFromISO(t.date))}? Both wallet balances go back to what they were.`,
-      confirmLabel: "Delete",
+      title: "Archive this move",
+      message: `The ${formatPeso(t.amountCents)} move from ${t.fromWallet.name} to ${t.toWallet.name} on ${longDayLabel(ymdFromISO(t.date))} stops counting, so both wallet balances go back to what they were. It is kept on the Archived page.`,
+      confirmLabel: "Archive",
       danger: true,
       onConfirm: async () => {
         setConfirmLoading(true);
@@ -533,9 +530,9 @@ export default function WalletsPage() {
                     e.preventDefault();
                     requestRemoveWallet(w);
                   }}
-                  className="rounded-md bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-600 transition hover:bg-red-100"
+                  className="rounded-md bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700 transition hover:bg-amber-100"
                 >
-                  Remove
+                  Archive
                 </button>
               </div>
             </div>
@@ -762,9 +759,9 @@ export default function WalletsPage() {
                       </button>
                       <button
                         onClick={() => requestDeleteTransfer(t)}
-                        className="rounded-md px-2 py-1 text-xs font-semibold text-red-600 transition hover:bg-red-50"
+                        className="rounded-md px-2 py-1 text-xs font-semibold text-amber-700 transition hover:bg-amber-50"
                       >
-                        Delete
+                        Archive
                       </button>
                     </td>
                   </tr>

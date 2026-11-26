@@ -48,6 +48,8 @@ export type CurrentUser = {
   imageUrl: string | null;
   role: "ADMIN" | "USER";
   active: boolean;
+  /** Set only while an admin is using "Log in as". */
+  impersonatedBy?: { id: string; name: string; email: string };
 };
 
 /**
@@ -76,13 +78,39 @@ export async function getCurrentUserRecord(): Promise<CurrentUser | null> {
 
   // Deleted or disabled accounts stop counting as signed in.
   if (!user || !user.active) return null;
+
+  // "Log in as": carry who the real admin is, and refuse the whole session if
+  // that admin has since been demoted, disabled or deleted.
+  if (session.act) {
+    const actor = await prisma.user.findUnique({
+      where: { id: session.act },
+      select: { id: true, name: true, email: true, role: true, active: true },
+    });
+    if (!actor || !actor.active || actor.role !== "ADMIN") return null;
+    return {
+      ...user,
+      impersonatedBy: {
+        id: actor.id,
+        name: actor.name,
+        email: actor.email,
+      },
+    };
+  }
+
   return user;
 }
 
-/** The signed-in user, but only if they are an admin. */
+/**
+ * The signed-in user, but only if they are an admin acting as themselves.
+ *
+ * An impersonated session is deliberately NOT admin, even when the person
+ * being impersonated is one: while you are looking at someone else's books you
+ * should not also be able to manage accounts.
+ */
 export async function getCurrentAdmin(): Promise<CurrentUser | null> {
   const user = await getCurrentUserRecord();
-  return user?.role === "ADMIN" ? user : null;
+  if (!user || user.impersonatedBy) return null;
+  return user.role === "ADMIN" ? user : null;
 }
 
 export async function clearSessionCookie(): Promise<void> {

@@ -34,7 +34,12 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     note?: string | null;
     fromWalletId?: string;
     toWalletId?: string;
+    archivedAt?: Date | null;
   } = {};
+
+  if (body.archived !== undefined) {
+    data.archivedAt = body.archived ? new Date() : null;
+  }
 
   if (body.date !== undefined) {
     const dateStr = String(body.date);
@@ -90,8 +95,8 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   return NextResponse.json({ transfer });
 }
 
-/** DELETE /api/transfers/:id */
-export async function DELETE(_req: NextRequest, { params }: Ctx) {
+/** DELETE /api/transfers/:id — archives; ?purge=1 deletes for good. */
+export async function DELETE(req: NextRequest, { params }: Ctx) {
   const user = await getCurrentUser();
   if (!user) return unauthorized();
   const { id } = await params;
@@ -102,6 +107,14 @@ export async function DELETE(_req: NextRequest, { params }: Ctx) {
   });
   if (!existing) return notFound("That transfer no longer exists");
 
-  await prisma.transfer.delete({ where: { id } });
-  return NextResponse.json({ ok: true });
+  if (new URL(req.url).searchParams.get("purge") === "1") {
+    await prisma.transfer.delete({ where: { id } });
+    return NextResponse.json({ ok: true, purged: true });
+  }
+
+  await prisma.transfer.update({
+    where: { id },
+    data: { archivedAt: new Date() },
+  });
+  return NextResponse.json({ ok: true, archived: true });
 }

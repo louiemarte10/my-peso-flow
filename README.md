@@ -12,6 +12,14 @@ Prisma 7 + Neon Postgres + Tailwind 4**.
 ## Features
 
 - **Sign in** with email + password, or with Google (optional, allow-listed).
+  Open sign-up at `/signup` (turn it off with `ALLOW_SIGNUP=false`).
+- **People** (admin only) - create accounts for other people, edit them, reset
+  passwords, enable/disable, and **Log in as** someone to encode on their
+  behalf with a banner and a one-click way back. **View books** is a read-only
+  summary of one person's figures.
+- **Archived** - archiving is the default instead of deleting. Archived rows
+  count towards nothing and wait on the Archived page until you **Restore** or
+  **Delete forever**.
 - **Dashboard** — today / last 7 days / this month / this year, each showing
   earnings, expenses and balance, plus all-time running balance and a strip of
   wallet balances. The chart switches between 7-day, month and year, and steps
@@ -46,6 +54,9 @@ Prisma 7 + Neon Postgres + Tailwind 4**.
 | Auth | A signed JWT in an httpOnly cookie (`jose`). `proxy.ts` guards pages; API routes check the session themselves. |
 | Data scope | Every query is filtered by `userId`, so accounts never see each other's ledger. |
 | Middleware | This project uses `proxy.ts` (Next 16 naming), not `middleware.ts`. |
+| Archiving | `archivedAt` timestamp, never a hard delete. **Every query feeding a number must carry `LIVE` from `lib/archive.ts`** - miss one and a balance silently disagrees with its own ledger. |
+| Roles | Read from the database per request, never from the session cookie, so promoting or disabling someone takes effect immediately. |
+| Impersonation | The session's `act` claim holds the real admin. An impersonated session is never treated as admin. |
 
 ## Setup
 
@@ -89,7 +100,8 @@ may sign in — keep it set for a personal ledger.
 1. Import the repo at <https://vercel.com/new>.
 2. Add `DATABASE_URL`, `DIRECT_URL`, `SESSION_SECRET` and — if you want Google
    sign-in — `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `ALLOWED_EMAILS`, and
-   `APP_URL` set to the deployed URL.
+   `APP_URL` set to the deployed URL. Set `ALLOW_SIGNUP=false` if you do not
+   want strangers creating their own accounts on a public URL.
 3. Add `https://<your-app>.vercel.app/api/auth/google/callback` to the Google
    OAuth client's authorised redirect URIs.
 4. Deploy, then run `npm run db:push` once against the same database.

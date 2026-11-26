@@ -29,7 +29,7 @@ export default function CategoriesPage() {
     setError("");
     try {
       const { categories } = await api.get<{ categories: Category[] }>(
-        "/api/categories?includeArchived=1",
+        "/api/categories",
       );
       setCategories(categories);
     } catch (err) {
@@ -63,12 +63,14 @@ export default function CategoriesPage() {
   function requestDelete(c: Category) {
     const used = c._count?.entries ?? 0;
     setConfirm({
-      title: used > 0 ? `Archive "${c.name}"` : `Delete "${c.name}"`,
+      title: `Archive "${c.name}"`,
       message:
-        used > 0
-          ? `${used} entr${used === 1 ? "y is" : "ies are"} filed under this category, so it will be archived instead of deleted — your history keeps its labels, and it stops appearing on the encode forms.`
-          : "This category is not used by any entry yet, so it will be deleted.",
-      confirmLabel: used > 0 ? "Archive" : "Delete",
+        `This category stops appearing on the encode forms. ` +
+        (used > 0
+          ? `The ${used} entr${used === 1 ? "y" : "ies"} filed under it keep their label and their amounts. `
+          : "") +
+        "You can restore it or delete it for good from the Archived page.",
+      confirmLabel: "Archive",
       danger: true,
       onConfirm: async () => {
         setConfirmLoading(true);
@@ -96,7 +98,12 @@ export default function CategoriesPage() {
           <strong>needs details</strong> on a vague catch-all like
           &ldquo;Others&rdquo; and encoding against it will insist you write
           what it actually was &mdash; e.g.{" "}
-          <em>6 Marlboro at 11 pesos each</em>.
+          <em>6 Marlboro at 11 pesos each</em>. Archiving never loses anything:
+          it waits on the{" "}
+          <a href="/archived" className="text-brand hover:underline">
+            Archived
+          </a>{" "}
+          page until you restore it or delete it for good.
         </p>
       </div>
 
@@ -182,7 +189,6 @@ function KindPanel({
   }
 
   const active = categories.filter((c) => !c.archived);
-  const archived = categories.filter((c) => c.archived);
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-surface p-5 shadow-sm">
@@ -293,45 +299,34 @@ function KindPanel({
                 <span className="shrink-0 text-xs text-slate-400">
                   {c._count?.entries ?? 0} used
                 </span>
+                {editingId === c.id ? (
+                  <button
+                    onClick={() => commitRename(c)}
+                    className="shrink-0 rounded-md bg-brand px-2 py-1 text-xs font-semibold text-white transition hover:bg-brand-dark"
+                  >
+                    Save
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setEditingId(c.id);
+                      setEditName(c.name);
+                    }}
+                    className="shrink-0 rounded-md px-2 py-1 text-xs font-semibold text-brand transition hover:bg-brand-light"
+                  >
+                    Edit
+                  </button>
+                )}
                 <button
                   onClick={() => onDelete(c)}
-                  className="shrink-0 rounded-md px-2 py-1 text-xs font-semibold text-red-600 transition hover:bg-red-50"
+                  className="shrink-0 rounded-md px-2 py-1 text-xs font-semibold text-amber-700 transition hover:bg-amber-50"
                 >
-                  Remove
+                  Archive
                 </button>
               </li>
             ))}
           </ul>
 
-          {archived.length > 0 && (
-            <details className="mt-4">
-              <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-slate-400">
-                Archived ({archived.length})
-              </summary>
-              <ul className="mt-2 divide-y divide-slate-100">
-                {archived.map((c) => (
-                  <li key={c.id} className="flex items-center gap-2 py-2">
-                    <span
-                      className="h-3 w-3 shrink-0 rounded-full opacity-50"
-                      style={{ background: c.color ?? "#64748B" }}
-                    />
-                    <span className="min-w-0 flex-1 truncate text-sm text-slate-400 line-through">
-                      {c.name}
-                    </span>
-                    <span className="shrink-0 text-xs text-slate-400">
-                      {c._count?.entries ?? 0} used
-                    </span>
-                    <button
-                      onClick={() => onUpdate(c.id, { archived: false })}
-                      className="shrink-0 rounded-md px-2 py-1 text-xs font-semibold text-brand transition hover:bg-brand-light"
-                    >
-                      Restore
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </details>
-          )}
         </>
       )}
     </div>

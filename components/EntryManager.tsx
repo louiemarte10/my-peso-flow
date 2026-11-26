@@ -222,11 +222,11 @@ export default function EntryManager({
 
   function requestDelete(e: Entry) {
     setConfirm({
-      title: `Delete this ${isEarning ? "earning" : "expense"}`,
-      message: `Remove ${formatPeso(e.amountCents)} on ${longDayLabel(
+      title: `Archive this ${isEarning ? "earning" : "expense"}`,
+      message: `${formatPeso(e.amountCents)} on ${longDayLabel(
         ymdFromISO(e.date),
-      )}? This can't be undone.`,
-      confirmLabel: "Delete",
+      )} will stop counting towards your totals and wallet balances. It is kept on the Archived page, where you can restore it or delete it for good.`,
+      confirmLabel: "Archive",
       danger: true,
       onConfirm: async () => {
         setConfirmLoading(true);
@@ -572,9 +572,9 @@ export default function EntryManager({
                         </button>
                         <button
                           onClick={() => requestDelete(e)}
-                          className="rounded-md px-2 py-1 text-xs font-semibold text-red-600 transition hover:bg-red-50"
+                          className="rounded-md px-2 py-1 text-xs font-semibold text-amber-700 transition hover:bg-amber-50"
                         >
-                          Delete
+                          Archive
                         </button>
                       </td>
                     </tr>

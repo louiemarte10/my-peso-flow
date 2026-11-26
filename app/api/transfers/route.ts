@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { badRequest, unauthorized } from "@/lib/api";
 import { pesosToCents } from "@/lib/money";
 import { isYmd, manilaDayStartUTC, manilaRangeUTC } from "@/lib/date";
+import { scopeFilter } from "@/lib/archive";
 
 const WALLET_PICK = { select: { id: true, name: true, icon: true, color: true } };
 
@@ -20,6 +21,7 @@ export async function GET(req: NextRequest) {
   const transfers = await prisma.transfer.findMany({
     where: {
       userId: user.sub,
+      ...scopeFilter(searchParams.get("include")),
       ...(isYmd(from) && isYmd(to) ? { date: manilaRangeUTC(from, to) } : {}),
       ...(walletId
         ? { OR: [{ fromWalletId: walletId }, { toWalletId: walletId }] }

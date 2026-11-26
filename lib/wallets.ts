@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "./db";
 import { addDaysKey, manilaRangeUTC, todayKey } from "./date";
+import { LIVE } from "./archive";
 import { SPEND_WINDOW_DAYS } from "./windows";
 
 export { SPEND_WINDOW_DAYS };
@@ -15,6 +16,7 @@ export type WalletSummary = {
   openingBalanceCents: number;
   lowBalanceCents: number;
   archived: boolean;
+  archivedAt: string | null;
   sortOrder: number;
 
   /** Derived: opening + earnings − expenses − transfers out (incl. fees) + transfers in. */
@@ -51,24 +53,24 @@ export async function walletSummaries(
   const [wallets, entryGroups, outGroups, inGroups, recentSpendGroups] =
     await Promise.all([
       prisma.wallet.findMany({
-        where: { userId, ...(includeArchived ? {} : { archived: false }) },
+        where: { userId, ...(includeArchived ? {} : { archivedAt: null }) },
         orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       }),
       prisma.entry.groupBy({
         by: ["walletId", "kind"],
-        where: { userId, walletId: { not: null } },
+        where: { userId, walletId: { not: null }, ...LIVE },
         _sum: { amountCents: true },
         _count: { _all: true },
       }),
       prisma.transfer.groupBy({
         by: ["fromWalletId"],
-        where: { userId },
+        where: { userId, ...LIVE },
         _sum: { amountCents: true, feeCents: true },
         _count: { _all: true },
       }),
       prisma.transfer.groupBy({
         by: ["toWalletId"],
-        where: { userId },
+        where: { userId, ...LIVE },
         _sum: { amountCents: true },
         _count: { _all: true },
       }),
@@ -78,6 +80,7 @@ export async function walletSummaries(
           userId,
           kind: "EXPENSE",
           walletId: { not: null },
+          ...LIVE,
           date: manilaRangeUTC(windowFrom, today),
         },
         _sum: { amountCents: true },
@@ -151,7 +154,8 @@ export async function walletSummaries(
       accountRef: w.accountRef,
       openingBalanceCents: w.openingBalanceCents,
       lowBalanceCents: w.lowBalanceCents,
-      archived: w.archived,
+      archived: w.archivedAt !== null,
+      archivedAt: w.archivedAt ? w.archivedAt.toISOString() : null,
       sortOrder: w.sortOrder,
 
       balanceCents,

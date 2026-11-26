@@ -7,10 +7,16 @@ const ALG = "HS256";
 const MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 days
 
 export type SessionPayload = {
-  sub: string; // user id
+  sub: string; // user id the session is acting AS
   name: string;
   email: string;
   image: string | null;
+  /**
+   * When an admin is using "Log in as", this is the real admin's id. The
+   * session behaves as `sub` in every way, but the banner and the way back
+   * come from here. Undefined for an ordinary session.
+   */
+  act?: string;
 };
 
 function getSecret(): Uint8Array {
@@ -28,6 +34,7 @@ export async function signSession(payload: SessionPayload): Promise<string> {
     name: payload.name,
     email: payload.email,
     image: payload.image,
+    ...(payload.act ? { act: payload.act } : {}),
   })
     .setProtectedHeader({ alg: ALG })
     .setSubject(payload.sub)
@@ -48,6 +55,7 @@ export async function verifySession(
       name: (payload.name as string) ?? "",
       email: (payload.email as string) ?? "",
       image: (payload.image as string | null) ?? null,
+      act: (payload.act as string | undefined) ?? undefined,
     };
   } catch {
     return null;

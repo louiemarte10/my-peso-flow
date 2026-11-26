@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { badRequest, notFound, unauthorized } from "@/lib/api";
+import { shapeArchivable } from "@/lib/archive";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -26,7 +27,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   const data: {
     name?: string;
     color?: string | null;
-    archived?: boolean;
+    archivedAt?: Date | null;
     requiresDetail?: boolean;
   } = {};
 
@@ -50,7 +51,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     data.color = body.color ? String(body.color).trim() : null;
   }
   if (body.archived !== undefined) {
-    data.archived = Boolean(body.archived);
+    data.archivedAt = body.archived ? new Date() : null;
   }
   if (body.requiresDetail !== undefined) {
     data.requiresDetail = Boolean(body.requiresDetail);
@@ -62,7 +63,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     include: { _count: { select: { entries: true } } },
   });
 
-  return NextResponse.json({ category });
+  return NextResponse.json({ category: shapeArchivable(category) });
 }
 
 /**
@@ -82,15 +83,20 @@ export async function DELETE(req: NextRequest, { params }: Ctx) {
   });
   if (!existing) return notFound("That category no longer exists");
 
-  const force = new URL(req.url).searchParams.get("force") === "1";
+  const url = new URL(req.url);
+  const force =
+    url.searchParams.get("force") === "1" ||
+    url.searchParams.get("purge") === "1";
 
-  if (existing._count.entries > 0 && !force) {
+  // Archive by default so nothing is lost; the Archived page sends purge=1
+  // for a permanent delete, and an unused category can go straight away.
+  if (!force) {
     const category = await prisma.category.update({
       where: { id },
-      data: { archived: true },
+      data: { archivedAt: new Date() },
       include: { _count: { select: { entries: true } } },
     });
-    return NextResponse.json({ archived: true, category });
+    return NextResponse.json({ archived: true, category: shapeArchivable(category) });
   }
 
   await prisma.category.delete({ where: { id } });

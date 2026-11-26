@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { api, type ManagedUser, type Role } from "@/lib/client";
 import { longDayLabel, ymdFromISO } from "@/lib/date";
 import ConfirmModal, { type ConfirmState } from "@/components/ConfirmModal";
@@ -21,6 +23,7 @@ const emptyUser = (): NewUser => ({
 });
 
 export default function UsersClient() {
+  const router = useRouter();
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [meId, setMeId] = useState("");
   const [loading, setLoading] = useState(true);
@@ -37,6 +40,10 @@ export default function UsersClient() {
 
   const [resetFor, setResetFor] = useState<ManagedUser | null>(null);
   const [resetPassword, setResetPassword] = useState("");
+
+  const [editFor, setEditFor] = useState<ManagedUser | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
 
   const load = useCallback(async () => {
     setError("");
@@ -110,6 +117,29 @@ export default function UsersClient() {
     );
     setResetFor(null);
     setResetPassword("");
+  }
+
+  async function saveEdit() {
+    if (!editFor) return;
+    const name = editName.trim();
+    const email = editEmail.trim().toLowerCase();
+    if (!name) return setError("Enter a name.");
+    if (!email) return setError("Enter an email address.");
+    await patch(editFor, { name, email });
+    setNotice(`Updated ${name}.`);
+    setEditFor(null);
+  }
+
+  /** Switch this session into that person's account, keeping a way back. */
+  async function loginAs(u: ManagedUser) {
+    setError("");
+    try {
+      await api.post(`/api/users/${u.id}/impersonate`);
+      router.replace("/dashboard");
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not switch");
+    }
   }
 
   function requestDelete(u: ManagedUser) {
@@ -233,6 +263,44 @@ export default function UsersClient() {
         </div>
       )}
 
+      {/* Edit person */}
+      {editFor && (
+        <div className="rounded-2xl border border-brand bg-surface p-5 shadow-sm">
+          <h2 className="mb-3 font-bold text-slate-800">Edit {editFor.name}</h2>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <Field label="Full name">
+              <input
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                className={inputCls}
+              />
+            </Field>
+            <Field label="Email (their sign-in)">
+              <input
+                type="email"
+                value={editEmail}
+                onChange={(e) => setEditEmail(e.target.value)}
+                className={inputCls}
+              />
+            </Field>
+            <div className="flex items-end gap-2">
+              <button
+                onClick={saveEdit}
+                className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-dark"
+              >
+                Save changes
+              </button>
+              <button
+                onClick={() => setEditFor(null)}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Password reset */}
       {resetFor && (
         <div className="rounded-2xl border border-brand bg-surface p-5 shadow-sm">
@@ -339,17 +407,40 @@ export default function UsersClient() {
                         {longDayLabel(ymdFromISO(u.createdAt))}
                       </td>
                       <td className="whitespace-nowrap px-3 py-2.5 text-right">
+                        <Link
+                          href={`/users/${u.id}`}
+                          className="rounded-md px-2 py-1 text-xs font-semibold text-brand transition hover:bg-brand-light"
+                        >
+                          View books
+                        </Link>
+                        <button
+                          onClick={() => {
+                            setEditFor(u);
+                            setEditName(u.name);
+                            setEditEmail(u.email);
+                          }}
+                          className="rounded-md px-2 py-1 text-xs font-semibold text-brand transition hover:bg-brand-light"
+                        >
+                          Edit
+                        </button>
                         <button
                           onClick={() => {
                             setResetFor(u);
                             setResetPassword("");
                           }}
-                          className="rounded-md px-2 py-1 text-xs font-semibold text-brand transition hover:bg-brand-light"
+                          className="rounded-md px-2 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-100"
                         >
                           Reset password
                         </button>
                         {!isMe && (
                           <>
+                            <button
+                              onClick={() => loginAs(u)}
+                              disabled={!u.active}
+                              className="rounded-md px-2 py-1 text-xs font-semibold text-amber-700 transition hover:bg-amber-50 disabled:opacity-40"
+                            >
+                              Log in as
+                            </button>
                             <button
                               onClick={() => patch(u, { active: !u.active })}
                               className="rounded-md px-2 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-100"
@@ -375,7 +466,11 @@ export default function UsersClient() {
       </div>
 
       <p className="text-xs text-slate-400">
-        Disabling an account blocks sign-in but keeps every record. Deleting one
+        <strong>View books</strong> is a read-only summary.{" "}
+        <strong>Log in as</strong> switches this session into their account so
+        you can encode for them; a banner stays on screen and brings you
+        straight back. Disabling an account blocks sign-in but keeps every
+        record. Deleting one
         removes the person and everything they encoded, permanently. The last
         remaining admin can&apos;t be demoted, disabled or deleted.
       </p>

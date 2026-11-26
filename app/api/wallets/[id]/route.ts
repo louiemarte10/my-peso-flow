@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { badRequest, notFound, unauthorized } from "@/lib/api";
 import { pesosToCents } from "@/lib/money";
 import { walletBalance } from "@/lib/wallets";
+import { LIVE } from "@/lib/archive";
 import type { WalletType } from "@/generated/prisma/client";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -29,19 +30,19 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
 
   const [entries, transfersOut, transfersIn] = await Promise.all([
     prisma.entry.findMany({
-      where: { userId: user.sub, walletId: id },
+      where: { userId: user.sub, walletId: id, ...LIVE },
       include: { category: { select: { name: true, color: true } } },
       orderBy: [{ date: "desc" }, { createdAt: "desc" }],
       take: 400,
     }),
     prisma.transfer.findMany({
-      where: { userId: user.sub, fromWalletId: id },
+      where: { userId: user.sub, fromWalletId: id, ...LIVE },
       include: { toWallet: { select: { name: true, icon: true } } },
       orderBy: [{ date: "desc" }, { createdAt: "desc" }],
       take: 400,
     }),
     prisma.transfer.findMany({
-      where: { userId: user.sub, toWalletId: id },
+      where: { userId: user.sub, toWalletId: id, ...LIVE },
       include: { fromWallet: { select: { name: true, icon: true } } },
       orderBy: [{ date: "desc" }, { createdAt: "desc" }],
       take: 400,
@@ -154,7 +155,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     accountRef?: string | null;
     openingBalanceCents?: number;
     lowBalanceCents?: number;
-    archived?: boolean;
+    archivedAt?: Date | null;
     sortOrder?: number;
   } = {};
 
@@ -191,7 +192,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     data.lowBalanceCents = pesosToCents(Number(body.lowBalance) || 0);
   }
   if (body.archived !== undefined) {
-    data.archived = Boolean(body.archived);
+    data.archivedAt = body.archived ? new Date() : null;
   }
   if (body.sortOrder !== undefined) {
     const n = Number(body.sortOrder);
@@ -226,14 +227,16 @@ export async function DELETE(req: NextRequest, { params }: Ctx) {
   });
   if (!existing) return notFound("That wallet no longer exists");
 
-  const used =
-    existing._count.entries +
-    existing._count.transfersFrom +
-    existing._count.transfersTo;
-  const force = new URL(req.url).searchParams.get("force") === "1";
+  const url = new URL(req.url);
+  const force =
+    url.searchParams.get("force") === "1" ||
+    url.searchParams.get("purge") === "1";
 
-  if (used > 0 && !force) {
-    await prisma.wallet.update({ where: { id }, data: { archived: true } });
+  if (!force) {
+    await prisma.wallet.update({
+      where: { id },
+      data: { archivedAt: new Date() },
+    });
     return NextResponse.json({ archived: true });
   }
 

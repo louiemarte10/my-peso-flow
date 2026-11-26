@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/auth";
 import { googleEnabled } from "@/lib/google";
+import { signupEnabled } from "@/lib/config";
 import LoginForm from "./LoginForm";
 
 export const metadata = { title: "Sign in — myPesoFlow" };
@@ -21,6 +22,7 @@ export default async function LoginPage({
   return (
     <LoginForm
       googleEnabled={googleEnabled()}
+      signupEnabled={signupEnabled()}
       next={safeNext}
       errorCode={error ?? null}
     />

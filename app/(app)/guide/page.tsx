@@ -151,14 +151,21 @@ export default function GuidePage() {
             picked, not the date you typed it.
           </li>
           <li>
-            <strong className="text-slate-700">Edit and delete anytime.</strong>{" "}
-            Every row on the Earnings and Expenses pages has Edit and Delete.
+            <strong className="text-slate-700">Edit anytime.</strong> Every row
+            on the Earnings, Expenses, Wallets and Categories pages has an
+            Edit button, so a wrong amount or date is a two-second fix.
           </li>
           <li>
-            <strong className="text-slate-700">Removing a used category</strong>{" "}
-            archives it instead of deleting, so your old entries keep their
-            labels.
+            <strong className="text-slate-700">Archive, never lose.</strong>{" "}
+            Archive asks you to confirm, then the row stops counting towards
+            every total and balance. It waits on{" "}
+            <Link href="/archived" className="text-brand hover:underline">
+              Archived
+            </Link>{" "}
+            where you can Restore it exactly as it was, or Delete forever.
+            Deleting forever is the only thing that cannot be undone.
           </li>
+
           <li>
             <strong className="text-slate-700">Amounts are exact.</strong> Money
             is stored in centavos, so no rounding drift builds up over a year.

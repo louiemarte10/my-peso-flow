@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { unauthorized } from "@/lib/api";
 import { walletSummaries } from "@/lib/wallets";
+import { LIVE } from "@/lib/archive";
 import {
   addDaysKey,
   addMonths,
@@ -99,7 +100,11 @@ export async function GET(req: NextRequest) {
   const [rows, allTimeGroups, firstEntry, recent, categories, wallets] =
     await Promise.all([
       prisma.entry.findMany({
-        where: { userId: user.sub, date: manilaRangeUTC(queryFrom, queryTo) },
+        where: {
+          userId: user.sub,
+          ...LIVE,
+          date: manilaRangeUTC(queryFrom, queryTo),
+        },
         select: {
           date: true,
           kind: true,
@@ -109,16 +114,16 @@ export async function GET(req: NextRequest) {
       }),
       prisma.entry.groupBy({
         by: ["kind"],
-        where: { userId: user.sub },
+        where: { userId: user.sub, ...LIVE },
         _sum: { amountCents: true },
       }),
       prisma.entry.findFirst({
-        where: { userId: user.sub },
+        where: { userId: user.sub, ...LIVE },
         orderBy: { date: "asc" },
         select: { date: true },
       }),
       prisma.entry.findMany({
-        where: { userId: user.sub },
+        where: { userId: user.sub, ...LIVE },
         include: {
           category: { select: { id: true, name: true, color: true } },
           wallet: { select: { id: true, name: true, icon: true, color: true } },

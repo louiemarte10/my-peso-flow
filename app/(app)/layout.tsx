@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUserRecord } from "@/lib/auth";
 import AppShell from "@/components/AppShell";
+import ImpersonationBanner from "@/components/ImpersonationBanner";
 
 export default async function AppLayout({
   children,
@@ -13,15 +14,27 @@ export default async function AppLayout({
   if (!user) redirect("/login");
 
   return (
-    <AppShell
-      user={{
-        name: user.name,
-        email: user.email,
-        image: user.imageUrl,
-        role: user.role,
-      }}
-    >
-      {children}
-    </AppShell>
+    <>
+      {user.impersonatedBy && (
+        <ImpersonationBanner
+          actingAs={{ name: user.name, email: user.email }}
+          admin={{
+            name: user.impersonatedBy.name,
+            email: user.impersonatedBy.email,
+          }}
+        />
+      )}
+      <AppShell
+        user={{
+          name: user.name,
+          email: user.email,
+          image: user.imageUrl,
+          // An impersonated session never gets the admin menu.
+          role: user.impersonatedBy ? "USER" : user.role,
+        }}
+      >
+        {children}
+      </AppShell>
+    </>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/client";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -18,10 +19,13 @@ const OAUTH_ERRORS: Record<string, string> = {
 
 export default function LoginForm({
   googleEnabled,
+  signupEnabled,
   next,
   errorCode,
 }: {
   googleEnabled: boolean;
+  /** Whether self sign-up is open (ALLOW_SIGNUP). */
+  signupEnabled: boolean;
   /** Where to land after signing in (already validated server-side). */
   next: string;
   /** An OAuth failure code bounced back by the Google callback, if any. */
@@ -32,6 +36,7 @@ export default function LoginForm({
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
 
   const error =
     formError ||
@@ -97,15 +102,24 @@ export default function LoginForm({
             <label className="mb-1 block text-sm font-medium text-slate-700">
               Password
             </label>
-            <input
-              type="password"
-              required
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 bg-surface px-3 py-2 text-slate-800 outline-none focus:border-brand focus:ring-2 focus:ring-brand/30"
-              placeholder="••••••••"
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                required
+                autoComplete="current-password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full rounded-lg border border-slate-300 bg-surface px-3 py-2 pr-16 text-slate-800 outline-none focus:border-brand focus:ring-2 focus:ring-brand/30"
+                placeholder="••••••••"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute inset-y-0 right-0 px-3 text-xs font-semibold text-slate-500 transition hover:text-brand"
+              >
+                {showPassword ? "Hide" : "Show"}
+              </button>
+            </div>
           </div>
 
           <button
@@ -140,6 +154,18 @@ export default function LoginForm({
         <div className="mx-auto mt-4 max-w-[13rem]">
           <ThemeToggle />
         </div>
+
+        {signupEnabled && (
+          <p className="mt-4 text-center text-sm text-slate-500">
+            Don&apos;t have an account?{" "}
+            <Link
+              href="/signup"
+              className="font-semibold text-brand transition hover:text-brand-dark hover:underline"
+            >
+              Create an account
+            </Link>
+          </p>
+        )}
       </div>
     </div>
   );

@@ -36,7 +36,13 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     note?: string | null;
     categoryId?: string | null;
     walletId?: string | null;
+    archivedAt?: Date | null;
   } = {};
+
+  // { archived: true | false } archives or restores.
+  if (body.archived !== undefined) {
+    data.archivedAt = body.archived ? new Date() : null;
+  }
 
   if (body.date !== undefined) {
     const dateStr = String(body.date);
@@ -106,8 +112,11 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   return NextResponse.json({ entry });
 }
 
-/** DELETE /api/entries/:id */
-export async function DELETE(_req: NextRequest, { params }: Ctx) {
+/**
+ * DELETE /api/entries/:id — archives by default, which is reversible.
+ * ?purge=1 deletes it for good; only the Archived page sends that.
+ */
+export async function DELETE(req: NextRequest, { params }: Ctx) {
   const user = await getCurrentUser();
   if (!user) return unauthorized();
   const { id } = await params;
@@ -118,6 +127,14 @@ export async function DELETE(_req: NextRequest, { params }: Ctx) {
   });
   if (!existing) return notFound("That entry no longer exists");
 
-  await prisma.entry.delete({ where: { id } });
-  return NextResponse.json({ ok: true });
+  if (new URL(req.url).searchParams.get("purge") === "1") {
+    await prisma.entry.delete({ where: { id } });
+    return NextResponse.json({ ok: true, purged: true });
+  }
+
+  await prisma.entry.update({
+    where: { id },
+    data: { archivedAt: new Date() },
+  });
+  return NextResponse.json({ ok: true, archived: true });
 }

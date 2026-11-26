@@ -37,6 +37,7 @@ export type Category = {
   kind: EntryKind;
   color: string | null;
   archived: boolean;
+  archivedAt?: string | null;
   /** Catch-all category: the note is mandatory when encoding against it. */
   requiresDetail: boolean;
   _count?: { entries: number };
@@ -82,6 +83,7 @@ export type Wallet = {
   transferInCents: number;
   transferOutCents: number;
   feesCents: number;
+  archivedAt: string | null;
   movementCount: number;
 
   recentSpendCents: number;
@@ -106,6 +108,7 @@ export type Entry = {
   category?: { id: string; name: string; color: string | null } | null;
   walletId: string | null;
   wallet?: WalletRef | null;
+  archivedAt?: string | null;
   createdAt: string;
 };
 
@@ -119,6 +122,7 @@ export type Transfer = {
   toWalletId: string;
   fromWallet: WalletRef;
   toWallet: WalletRef;
+  archivedAt?: string | null;
   createdAt: string;
 };
 
@@ -175,6 +179,42 @@ export type DashboardData = {
   recent: Entry[];
   wallets: Wallet[];
   walletTotals: WalletTotals;
+};
+
+/** Everything one person has archived, as the Archived page needs it. */
+export type ArchiveData = {
+  entries: Entry[];
+  transfers: Transfer[];
+  categories: Category[];
+  wallets: (Wallet & { movementCount: number })[];
+  counts: {
+    entries: number;
+    transfers: number;
+    categories: number;
+    wallets: number;
+    total: number;
+  };
+};
+
+/** An admin's read-only view of one person's books. */
+export type UserOverview = {
+  user: {
+    id: string;
+    name: string;
+    email: string;
+    role: Role;
+    active: boolean;
+    imageUrl: string | null;
+    createdAt: string;
+  };
+  today: Totals;
+  last7: Totals;
+  month: Totals;
+  year: Totals;
+  allTime: Totals & { firstEntry: string | null };
+  wallets: Wallet[];
+  walletTotals: WalletTotals;
+  recent: Entry[];
 };
 
 export const WALLET_TYPE_LABEL: Record<WalletType, string> = {
