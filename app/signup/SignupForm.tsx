@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/client";
 import ThemeToggle from "@/components/ThemeToggle";
+
+type EmailState = "idle" | "checking" | "free" | "taken" | "invalid";
 
 export default function SignupForm() {
   const router = useRouter();
@@ -15,6 +17,47 @@ export default function SignupForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [emailState, setEmailState] = useState<EmailState>("idle");
+
+  // Tell them the address is taken while they type, instead of making them
+  // fill the whole form first. The server still decides on submit.
+  /* The hint tracks an answer only the server has, so it genuinely belongs in
+     an effect. The rule below exists to catch render loops; this debounced
+     fetch settles after one round trip. */
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    const value = email.trim().toLowerCase();
+
+    if (!value) {
+      setEmailState("idle");
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+      setEmailState("invalid");
+      return;
+    }
+
+    setEmailState("checking");
+    const cancel = { current: false };
+    const timer = setTimeout(async () => {
+      try {
+        const res = await api.get<{ available: boolean | null }>(
+          `/api/auth/check-email?email=${encodeURIComponent(value)}`,
+        );
+        if (cancel.current) return;
+        setEmailState(res.available === false ? "taken" : "free");
+      } catch {
+        // A failed check must never block signing up — the server decides.
+        if (!cancel.current) setEmailState("idle");
+      }
+    }, 450);
+
+    return () => {
+      cancel.current = true;
+      clearTimeout(timer);
+    };
+  }, [email]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -30,20 +73,25 @@ export default function SignupForm() {
     }
 
     setLoading(true);
+    const cleanEmail = email.trim().toLowerCase();
     try {
       await api.post("/api/auth/signup", {
         name: name.trim(),
-        email: email.trim().toLowerCase(),
+        email: cleanEmail,
         password,
       });
-      // The API signs you in, so go straight to the dashboard.
-      router.replace("/dashboard");
+      // Deliberately not signed in: go and prove the password works.
+      router.replace(
+        `/login?created=1&email=${encodeURIComponent(cleanEmail)}`,
+      );
       router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create account");
       setLoading(false);
     }
   }
+
+  const emailTaken = emailState === "taken";
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-brand-light via-ice to-ice p-4">
@@ -92,9 +140,36 @@ export default function SignupForm() {
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className={inputCls}
+              className={`${inputCls} ${
+                emailTaken ? "border-red-500 focus:border-red-500" : ""
+              }`}
               placeholder="you@example.com"
+              aria-invalid={emailTaken}
             />
+            <p className="mt-1 min-h-[1.25rem] text-xs">
+              {emailState === "checking" && (
+                <span className="text-slate-400">Checking…</span>
+              )}
+              {emailState === "free" && (
+                <span className="text-income">✓ That email is available</span>
+              )}
+              {emailTaken && (
+                <span className="text-red-600">
+                  That email is not available —{" "}
+                  <Link
+                    href={`/login?email=${encodeURIComponent(email.trim().toLowerCase())}`}
+                    className="font-semibold underline"
+                  >
+                    sign in instead
+                  </Link>
+                </span>
+              )}
+              {emailState === "invalid" && (
+                <span className="text-slate-400">
+                  Enter a complete email address
+                </span>
+              )}
+            </p>
           </div>
 
           <div>
@@ -138,7 +213,7 @@ export default function SignupForm() {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || emailTaken}
             className="w-full rounded-lg bg-brand py-2.5 font-semibold text-white transition hover:bg-brand-dark disabled:opacity-60"
           >
             {loading ? "Creating…" : "Create account"}

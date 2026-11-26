@@ -12,7 +12,9 @@ Prisma 7 + Neon Postgres + Tailwind 4**.
 ## Features
 
 - **Sign in** with email + password, or with Google (optional, allow-listed).
-  Open sign-up at `/signup` (turn it off with `ALLOW_SIGNUP=false`).
+  Open sign-up at `/signup` (turn it off with `ALLOW_SIGNUP=false`). Sign-up
+  checks the address as you type and does NOT sign you in: it sends you to the
+  sign-in page so the first thing you do is prove the password works.
 - **People** (admin only) - create accounts for other people, edit them, reset
   passwords, enable/disable, and **Log in as** someone to encode on their
   behalf with a banner and a one-click way back. **View books** is a read-only

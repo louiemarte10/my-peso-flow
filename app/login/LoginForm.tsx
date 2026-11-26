@@ -22,17 +22,23 @@ export default function LoginForm({
   signupEnabled,
   next,
   errorCode,
+  justCreated,
+  initialEmail,
 }: {
   googleEnabled: boolean;
   /** Whether self sign-up is open (ALLOW_SIGNUP). */
   signupEnabled: boolean;
+  /** Arrived here straight after creating an account. */
+  justCreated: boolean;
+  /** Pre-filled so they only have to type the password they just chose. */
+  initialEmail: string;
   /** Where to land after signing in (already validated server-side). */
   next: string;
   /** An OAuth failure code bounced back by the Google callback, if any. */
   errorCode: string | null;
 }) {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState("");
@@ -77,6 +83,13 @@ export default function LoginForm({
           onSubmit={handleSubmit}
           className="space-y-4 rounded-2xl bg-surface p-6 shadow-xl ring-1 ring-black/5"
         >
+          {justCreated && !formError && (
+            <div className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-income">
+              <strong>Account created.</strong> Sign in with the password you
+              just chose.
+            </div>
+          )}
+
           {error && (
             <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
               {error}
@@ -109,6 +122,7 @@ export default function LoginForm({
                 autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                autoFocus={Boolean(initialEmail)}
                 className="w-full rounded-lg border border-slate-300 bg-surface px-3 py-2 pr-16 text-slate-800 outline-none focus:border-brand focus:ring-2 focus:ring-brand/30"
                 placeholder="••••••••"
               />

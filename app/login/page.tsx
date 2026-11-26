@@ -9,13 +9,18 @@ export const metadata = { title: "Sign in — myPesoFlow" };
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string; error?: string }>;
+  searchParams: Promise<{
+    next?: string;
+    error?: string;
+    created?: string;
+    email?: string;
+  }>;
 }) {
   // Already signed in? Skip straight to the dashboard.
   const user = await getCurrentUser();
   if (user) redirect("/dashboard");
 
-  const { next, error } = await searchParams;
+  const { next, error, created, email } = await searchParams;
   const safeNext =
     next && next.startsWith("/") && next !== "/login" ? next : "/dashboard";
 
@@ -25,6 +30,8 @@ export default async function LoginPage({
       signupEnabled={signupEnabled()}
       next={safeNext}
       errorCode={error ?? null}
+      justCreated={created === "1"}
+      initialEmail={email ?? ""}
     />
   );
 }

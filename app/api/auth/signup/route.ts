@@ -1,14 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { hashPassword, setSessionCookie } from "@/lib/auth";
+import { hashPassword } from "@/lib/auth";
 import { badRequest } from "@/lib/api";
 import { seedStarterData } from "@/lib/users";
-import { signupEnabled } from "@/lib/config";
+import { EMAIL_TAKEN, signupEnabled } from "@/lib/config";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
- * POST /api/auth/signup — create your own account and land straight in.
+ * POST /api/auth/signup — create an account.
+ *
+ * It deliberately does NOT sign you in: the form sends you to the sign-in page
+ * so the first thing you do is prove the password you just chose actually
+ * works. Getting that wrong on day one is much cheaper to fix than finding out
+ * a week later.
  *
  * New accounts are always USER. Only an existing admin can hand out admin,
  * from the People page, so opening sign-up never gives anyone else control.
@@ -44,31 +49,36 @@ export async function POST(req: NextRequest) {
     where: { email },
     select: { id: true },
   });
-  if (taken) {
-    return badRequest("That email already has an account — sign in instead");
-  }
+  if (taken) return badRequest(EMAIL_TAKEN);
 
   const passwordHash = await hashPassword(password);
 
-  // Account and starter data together, so a failure can't leave a half-built
-  // account that cannot be signed into or recreated.
-  const user = await prisma.$transaction(async (tx) => {
-    const created = await tx.user.create({
-      data: { name, email, role: "USER", passwordHash },
+  try {
+    // Account and starter data together, so a failure can't leave a half-built
+    // account that cannot be signed into or recreated.
+    const user = await prisma.$transaction(async (tx) => {
+      const created = await tx.user.create({
+        data: { name, email, role: "USER", passwordHash },
+      });
+      await seedStarterData(created.id, tx);
+      return created;
     });
-    await seedStarterData(created.id, tx);
-    return created;
-  });
 
-  await setSessionCookie({
-    sub: user.id,
-    name: user.name,
-    email: user.email,
-    image: user.imageUrl,
-  });
-
-  return NextResponse.json(
-    { user: { id: user.id, name: user.name, email: user.email } },
-    { status: 201 },
-  );
+    return NextResponse.json(
+      { user: { id: user.id, name: user.name, email: user.email } },
+      { status: 201 },
+    );
+  } catch (err) {
+    // Two people submitting the same address at the same moment both pass the
+    // check above; the unique index is what actually decides it, so turn that
+    // collision into the same friendly message rather than a 500.
+    if (
+      typeof err === "object" &&
+      err !== null &&
+      (err as { code?: string }).code === "P2002"
+    ) {
+      return badRequest(EMAIL_TAKEN);
+    }
+    throw err;
+  }
 }
