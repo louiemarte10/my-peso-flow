@@ -8,7 +8,7 @@ import {
   googleEnabled,
   OAUTH_STATE_COOKIE,
 } from "@/lib/google";
-import { seedCategories } from "@/lib/users";
+import { seedStarterData } from "@/lib/users";
 
 function fail(req: NextRequest, code: string) {
   return NextResponse.redirect(new URL(`/login?error=${code}`, req.url));
@@ -73,7 +73,7 @@ export async function GET(req: NextRequest) {
     isNew = true;
   }
 
-  if (isNew) await seedCategories(user.id);
+  if (isNew) await seedStarterData(user.id);
 
   await setSessionCookie({
     sub: user.id,

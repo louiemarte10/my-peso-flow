@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { unauthorized } from "@/lib/api";
+import { walletSummaries } from "@/lib/wallets";
 import {
   addDaysKey,
   addMonths,
@@ -95,7 +96,7 @@ export async function GET(req: NextRequest) {
   const queryFrom = viewFrom < cardsFrom ? viewFrom : cardsFrom;
   const queryTo = viewTo > cardsTo ? viewTo : cardsTo;
 
-  const [rows, allTimeGroups, firstEntry, recent, categories] =
+  const [rows, allTimeGroups, firstEntry, recent, categories, wallets] =
     await Promise.all([
       prisma.entry.findMany({
         where: { userId: user.sub, date: manilaRangeUTC(queryFrom, queryTo) },
@@ -118,7 +119,10 @@ export async function GET(req: NextRequest) {
       }),
       prisma.entry.findMany({
         where: { userId: user.sub },
-        include: { category: { select: { id: true, name: true, color: true } } },
+        include: {
+          category: { select: { id: true, name: true, color: true } },
+          wallet: { select: { id: true, name: true, icon: true, color: true } },
+        },
         orderBy: [{ date: "desc" }, { createdAt: "desc" }],
         take: 8,
       }),
@@ -126,6 +130,7 @@ export async function GET(req: NextRequest) {
         where: { userId: user.sub },
         select: { id: true, name: true, color: true },
       }),
+      walletSummaries(user.sub, { includeArchived: false }),
     ]);
 
   // ── Headline cards ──
@@ -242,5 +247,11 @@ export async function GET(req: NextRequest) {
     topExpenses: slices(expenseByCategory),
     topEarnings: slices(earningByCategory),
     recent,
+    wallets,
+    walletTotals: {
+      totalCents: wallets.reduce((sum, w) => sum + w.balanceCents, 0),
+      walletCount: wallets.length,
+      lowCount: wallets.filter((w) => w.low).length,
+    },
   });
 }

@@ -1,4 +1,4 @@
-// myPesoFlow — personal earnings & expense tracker.
+// myPesoFlow — personal earnings & expense tracker with wallets.
 // Prisma 7 schema. Money is stored as integer centavos (₱1 = 100) so we never
 // hit floating-point rounding; the API layer converts to/from pesos.
 // Dates are stored as the UTC instant of 00:00 Manila for that calendar day.
@@ -22,6 +22,14 @@ enum EntryKind {
   EXPENSE
 }
 
+enum WalletType {
+  BANK // Security Bank, BPI, GoTyme…
+  EWALLET // GCash, Maya…
+  CASH // physical cash on hand
+  SAVINGS // a set-aside / ipon fund
+  CREDIT // credit card or line
+}
+
 model User {
   id           String   @id @default(cuid())
   name         String
@@ -36,6 +44,8 @@ model User {
 
   categories Category[]
   entries    Entry[]
+  wallets    Wallet[]
+  transfers  Transfer[]
 }
 
 model Category {
@@ -55,22 +65,83 @@ model Category {
   @@index([userId, kind])
 }
 
+/// A place money actually sits: a bank account, an e-wallet, cash in your
+/// pocket. Its balance is derived — opening balance, plus earnings paid into
+/// it, minus expenses paid out of it, plus/minus transfers.
+model Wallet {
+  id                  String     @id @default(cuid())
+  name                String
+  type                WalletType @default(EWALLET)
+  color               String? // hex, used on the wallet cards
+  icon                String? // one emoji shown on the card
+  accountRef          String? // optional nickname / last 4 digits
+  openingBalanceCents Int        @default(0)
+  /// Warn when the balance drops to or below this. 0 disables the warning.
+  lowBalanceCents     Int        @default(0)
+  archived            Boolean    @default(false)
+  sortOrder           Int        @default(0)
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  entries       Entry[]
+  transfersFrom Transfer[] @relation("TransferFrom")
+  transfersTo   Transfer[] @relation("TransferTo")
+
+  @@unique([userId, name])
+  @@index([userId, archived])
+}
+
 model Entry {
   id          String    @id @default(cuid())
   date        DateTime // 00:00 Manila for the calendar day, stored as UTC
   kind        EntryKind
   amountCents Int
   note        String?
-  method      String? // Cash / GCash / Bank / etc. (optional)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
   categoryId String?
   category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
 
+  /// Which wallet the money landed in (earning) or came out of (expense).
+  walletId String?
+  wallet   Wallet? @relation(fields: [walletId], references: [id], onDelete: SetNull)
+
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, date])
   @@index([userId, kind, date])
+  @@index([userId, walletId, date])
+}
+
+/// Money moving between your own wallets — an ATM withdrawal, a bank-to-GCash
+/// cash-in, setting money aside into savings. It is never income or an expense,
+/// only a move, so it never touches your earnings/expense totals. `feeCents` is
+/// the charge the move itself cost (ATM fee, cash-in fee) and IS real money
+/// gone from the source wallet.
+model Transfer {
+  id          String   @id @default(cuid())
+  date        DateTime
+  amountCents Int
+  feeCents    Int      @default(0)
+  note        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  fromWalletId String
+  fromWallet   Wallet @relation("TransferFrom", fields: [fromWalletId], references: [id], onDelete: Cascade)
+
+  toWalletId String
+  toWallet   Wallet @relation("TransferTo", fields: [toWalletId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, date])
+  @@index([userId, fromWalletId])
+  @@index([userId, toWalletId])
 }

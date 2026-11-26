@@ -18,6 +18,15 @@ export function manilaDayKey(instant: Date): string {
     .slice(0, 10);
 }
 
+/**
+ * The Manila calendar day for an ISO instant string as the API returns it.
+ * NEVER slice an ISO string to get the day: 00:00 Manila serialises as 16:00
+ * UTC on the PREVIOUS date, so slicing shifts every date back by one.
+ */
+export function ymdFromISO(iso: string): string {
+  return manilaDayKey(new Date(iso));
+}
+
 /** UTC half-open range [gte, lt) covering Manila days from..to (inclusive). */
 export function manilaRangeUTC(fromYmd: string, toYmd: string) {
   const gte = manilaDayStartUTC(fromYmd);

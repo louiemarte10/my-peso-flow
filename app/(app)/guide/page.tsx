@@ -19,8 +19,23 @@ const STEPS = [
     ),
   },
   {
+    icon: "👛",
+    title: "2. Add your wallets",
+    body: (
+      <>
+        On{" "}
+        <Link href="/wallets" className="text-brand hover:underline">
+          My Wallets
+        </Link>
+        , add every place your money sits — Security Bank, GoTyme, GCash, cash
+        in your pocket. Set each one&apos;s <strong>opening balance</strong> to
+        what is in it right now. From then on the balance is worked out for you.
+      </>
+    ),
+  },
+  {
     icon: "💰",
-    title: "2. Encode what came in",
+    title: "3. Encode what came in",
     body: (
       <>
         On{" "}
@@ -35,7 +50,7 @@ const STEPS = [
   },
   {
     icon: "🧾",
-    title: "3. Encode what went out",
+    title: "4. Encode what went out",
     body: (
       <>
         On{" "}
@@ -43,13 +58,27 @@ const STEPS = [
           Expenses
         </Link>
         , same idea: the date you spent it, the category, the amount. Use the
-        note field for anything you will want to recognise later.
+        note field for anything you will want to recognise later. Pick the
+        wallet it came out of and that wallet&apos;s balance drops to match.
+      </>
+    ),
+  },
+  {
+    icon: "🏧",
+    title: "Withdrawing and moving money",
+    body: (
+      <>
+        Taking cash out of the ATM, cashing in to GCash, setting money aside for
+        ipon — all of these are <strong>moves</strong>, not expenses. Use{" "}
+        <strong>Move money / Withdraw</strong> on the Wallets page so your
+        earnings and expense totals stay honest. Put any ATM or cash-in charge
+        in the fee box: that part really is gone, and it is counted as such.
       </>
     ),
   },
   {
     icon: "📊",
-    title: "4. Watch the balance",
+    title: "5. Watch the balance",
     body: (
       <>
         The{" "}
@@ -64,7 +93,7 @@ const STEPS = [
   },
   {
     icon: "📅",
-    title: "5. Look things up later",
+    title: "6. Look things up later",
     body: (
       <>
         <Link href="/history" className="text-brand hover:underline">
@@ -133,6 +162,20 @@ export default function GuidePage() {
           <li>
             <strong className="text-slate-700">Amounts are exact.</strong> Money
             is stored in centavos, so no rounding drift builds up over a year.
+          </li>
+          <li>
+            <strong className="text-slate-700">
+              Wallet balances are never typed in.
+            </strong>{" "}
+            Each one is opening balance + money in − money out, recalculated
+            every time. Fix a wrong entry from last month and the balance
+            corrects itself.
+          </li>
+          <li>
+            <strong className="text-slate-700">When to withdraw.</strong> Each
+            wallet shows what you spend from it per day over the last 30 days
+            and roughly how many days that balance lasts. Set a{" "}
+            <em>warn below</em> amount and the wallet flags itself as low.
           </li>
         </ul>
       </div>

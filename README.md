@@ -13,8 +13,18 @@ Prisma 7 + Neon Postgres + Tailwind 4**.
 
 - **Sign in** with email + password, or with Google (optional, allow-listed).
 - **Dashboard** — today / last 7 days / this month / this year, each showing
-  earnings, expenses and balance, plus all-time running balance. The chart
-  switches between 7-day, month and year, and steps back through past periods.
+  earnings, expenses and balance, plus all-time running balance and a strip of
+  wallet balances. The chart switches between 7-day, month and year, and steps
+  back through past periods.
+- **My Wallets** — one card per place money sits (Security Bank, GoTyme, GCash,
+  cash on hand). Balances are *derived*, never typed: opening balance + money in
+  − money out. Each wallet shows its 30-day spend rate, roughly how many days
+  the balance lasts, and flags itself when it drops below the mark you set.
+  Open a wallet for its full ledger with a running balance after every movement.
+- **Move money / Withdraw** — ATM withdrawals, bank-to-GCash cash-ins, setting
+  money aside. Transfers move money between your own wallets without touching
+  your earnings or expense totals; the fee box captures what the move itself
+  cost, and that is treated as real money gone.
 - **Earnings** — encode salary, freelance, business or bonus against the date
   it was received.
 - **Expenses** — same, for money going out.
@@ -30,6 +40,8 @@ Prisma 7 + Neon Postgres + Tailwind 4**.
 | Thing | How it works |
 | --- | --- |
 | Money | Stored as integer **centavos**. `lib/money.ts` converts to/from pesos. No rounding drift. |
+| Wallet balances | Never stored. `lib/wallets.ts` recomputes them from entries + transfers on every read, so editing old rows self-corrects. |
+| Transfers | Moves between your own wallets. Never counted as income or expense; `feeCents` is, since it really leaves the source wallet. |
 | Dates | A day is a **Manila** calendar day (UTC+8). `lib/date.ts` converts between `"YYYY-MM-DD"` and UTC instants. |
 | Auth | A signed JWT in an httpOnly cookie (`jose`). `proxy.ts` guards pages; API routes check the session themselves. |
 | Data scope | Every query is filtered by `userId`, so accounts never see each other's ledger. |
@@ -41,7 +53,7 @@ Prisma 7 + Neon Postgres + Tailwind 4**.
 npm install          # also runs `prisma generate`
 cp .env.example .env # then fill it in
 npm run db:push      # create the tables in Neon
-npm run db:seed      # create your account + starter categories
+npm run db:seed      # create your account + starter categories and wallets
 npm run dev          # http://localhost:3000
 ```
 
@@ -69,7 +81,7 @@ may sign in — keep it set for a personal ledger.
 | `npm run db:push` | Push the schema to Neon (no migration files) |
 | `npm run db:migrate` | Create and apply a migration |
 | `npm run db:studio` | Browse the data in Prisma Studio |
-| `npm run db:seed` | Create the first account + starter categories |
+| `npm run db:seed` | Create the first account + starter categories and wallets |
 | `npm run lint` | ESLint |
 
 ## Deploying to Vercel
@@ -86,11 +98,12 @@ may sign in — keep it set for a personal ledger.
 
 ```
 app/
-  (app)/            pages behind the login (dashboard, earnings, expenses, …)
-  api/              route handlers (auth, entries, categories, dashboard, me)
+  (app)/            pages behind the login (dashboard, wallets, earnings, …)
+  api/              route handlers (auth, entries, categories, wallets,
+                    transfers, dashboard, me)
   login/            sign-in page
 components/         AppShell, EntryManager, FlowChart, StatCard, …
-lib/                db, auth, session, google, money, date, client helpers
+lib/                db, auth, session, google, money, date, wallets, client
 prisma/             schema.prisma + seed.ts
 proxy.ts            route protection
 ```

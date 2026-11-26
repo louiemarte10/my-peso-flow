@@ -7,6 +7,11 @@ import { isYmd, manilaDayStartUTC } from "@/lib/date";
 
 type Ctx = { params: Promise<{ id: string }> };
 
+const ENTRY_INCLUDE = {
+  category: { select: { id: true, name: true, color: true } },
+  wallet: { select: { id: true, name: true, icon: true, color: true } },
+};
+
 /** PATCH /api/entries/:id — edit an encoded entry. */
 export async function PATCH(req: NextRequest, { params }: Ctx) {
   const user = await getCurrentUser();
@@ -29,8 +34,8 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     date?: Date;
     amountCents?: number;
     note?: string | null;
-    method?: string | null;
     categoryId?: string | null;
+    walletId?: string | null;
   } = {};
 
   if (body.date !== undefined) {
@@ -50,9 +55,6 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   if (body.note !== undefined) {
     data.note = body.note ? String(body.note).trim() || null : null;
   }
-  if (body.method !== undefined) {
-    data.method = body.method ? String(body.method).trim() || null : null;
-  }
 
   if (body.categoryId !== undefined) {
     const categoryId = body.categoryId ? String(body.categoryId) : null;
@@ -66,10 +68,22 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     data.categoryId = categoryId;
   }
 
+  if (body.walletId !== undefined) {
+    const walletId = body.walletId ? String(body.walletId) : null;
+    if (walletId) {
+      const owned = await prisma.wallet.findFirst({
+        where: { id: walletId, userId: user.sub },
+        select: { id: true },
+      });
+      if (!owned) return badRequest("That wallet does not exist");
+    }
+    data.walletId = walletId;
+  }
+
   const entry = await prisma.entry.update({
     where: { id },
     data,
-    include: { category: { select: { id: true, name: true, color: true } } },
+    include: ENTRY_INCLUDE,
   });
 
   return NextResponse.json({ entry });

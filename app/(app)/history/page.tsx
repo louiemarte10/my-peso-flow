@@ -4,7 +4,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { api, type Entry, type Totals } from "@/lib/client";
 import { formatPeso } from "@/lib/money";
-import { addDaysKey, longDayLabel, monthStartKey, todayKey, yearStartKey } from "@/lib/date";
+import {
+  addDaysKey,
+  longDayLabel,
+  monthStartKey,
+  todayKey,
+  yearStartKey,
+  ymdFromISO,
+} from "@/lib/date";
 import { SkeletonRows } from "@/components/Skeleton";
 
 type Filter = "ALL" | "EARNING" | "EXPENSE";
@@ -56,7 +63,7 @@ export default function HistoryPage() {
       return (
         (e.note ?? "").toLowerCase().includes(q) ||
         (e.category?.name ?? "").toLowerCase().includes(q) ||
-        (e.method ?? "").toLowerCase().includes(q)
+        (e.wallet?.name ?? "").toLowerCase().includes(q)
       );
     });
   }, [entries, filter, search]);
@@ -65,7 +72,7 @@ export default function HistoryPage() {
   const days = useMemo(() => {
     const map = new Map<string, Entry[]>();
     for (const e of visible) {
-      const key = e.date.slice(0, 10);
+      const key = ymdFromISO(e.date);
       const list = map.get(key);
       if (list) list.push(e);
       else map.set(key, [e]);
@@ -74,14 +81,14 @@ export default function HistoryPage() {
   }, [visible]);
 
   function exportCsv() {
-    const head = ["Date", "Type", "Category", "Note", "Via", "Amount"];
+    const head = ["Date", "Type", "Category", "Wallet", "Note", "Amount"];
     const lines = visible.map((e) =>
       [
-        e.date.slice(0, 10),
+        ymdFromISO(e.date),
         e.kind === "EARNING" ? "Earning" : "Expense",
         e.category?.name ?? "Uncategorised",
+        e.wallet?.name ?? "",
         e.note ?? "",
-        e.method ?? "",
         (e.amountCents / 100).toFixed(2),
       ]
         .map((cell) => `"${String(cell).replace(/"/g, '""')}"`)
@@ -175,7 +182,7 @@ export default function HistoryPage() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search note or category…"
+            placeholder="Search note, category or wallet…"
             className="ml-auto w-full max-w-xs rounded-lg border border-slate-300 bg-surface px-3 py-1.5 text-sm text-slate-700 outline-none focus:border-brand focus:ring-2 focus:ring-brand/30"
           />
         </div>
@@ -186,7 +193,7 @@ export default function HistoryPage() {
               <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
                 <th className="px-3 py-2.5 font-semibold">Category</th>
                 <th className="px-3 py-2.5 font-semibold">Note</th>
-                <th className="px-3 py-2.5 font-semibold">Via</th>
+                <th className="px-3 py-2.5 font-semibold">Wallet</th>
                 <th className="px-3 py-2.5 text-right font-semibold">Amount</th>
               </tr>
             </thead>
@@ -255,8 +262,10 @@ export default function HistoryPage() {
                                 <td className="max-w-[18rem] truncate px-3 py-2.5 text-slate-500">
                                   {e.note ?? "—"}
                                 </td>
-                                <td className="px-3 py-2.5 text-slate-500">
-                                  {e.method ?? "—"}
+                                <td className="whitespace-nowrap px-3 py-2.5 text-slate-500">
+                                  {e.wallet
+                                    ? `${e.wallet.icon ?? "👛"} ${e.wallet.name}`
+                                    : "—"}
                                 </td>
                                 <td
                                   className={`px-3 py-2.5 text-right font-semibold tabular-nums ${

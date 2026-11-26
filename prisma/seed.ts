@@ -1,18 +1,18 @@
 /**
- * Creates your first myPesoFlow account plus its starter categories.
+ * Creates your first myPesoFlow account plus its starter categories and wallets.
  * Run once after `npm run db:push`:
  *
  *   npm run db:seed
  *
  * Credentials come from SEED_EMAIL / SEED_PASSWORD / SEED_NAME in .env.
  * Running it again is safe: an existing account is left alone and only the
- * missing categories are added.
+ * missing categories and wallets are added.
  */
 import "dotenv/config";
 import bcrypt from "bcryptjs";
 import { PrismaClient } from "../generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
-import { DEFAULT_CATEGORIES } from "../lib/defaults";
+import { DEFAULT_CATEGORIES, DEFAULT_WALLETS } from "../lib/defaults";
 
 const connectionString = process.env.DIRECT_URL ?? process.env.DATABASE_URL;
 if (!connectionString) {
@@ -39,20 +39,29 @@ async function main() {
         },
       });
 
-  const { count } = await prisma.category.createMany({
-    data: DEFAULT_CATEGORIES.map((c) => ({ ...c, userId: user.id })),
-    skipDuplicates: true,
-  });
+  const [categories, wallets] = await Promise.all([
+    prisma.category.createMany({
+      data: DEFAULT_CATEGORIES.map((c) => ({ ...c, userId: user.id })),
+      skipDuplicates: true,
+    }),
+    prisma.wallet.createMany({
+      data: DEFAULT_WALLETS.map((w) => ({ ...w, userId: user.id })),
+      skipDuplicates: true,
+    }),
+  ]);
 
   console.log(
     existing
-      ? `Account ${email} already existed — left as is.`
+      ? `Account ${email} already existed - left as is.`
       : `Created account ${email} with password: ${password}`,
   );
-  console.log(`Added ${count} categor${count === 1 ? "y" : "ies"}.`);
+  console.log(`Added ${categories.count} categories and ${wallets.count} wallets.`);
   if (!existing) {
     console.log("Sign in, then change the password under Settings.");
   }
+  console.log(
+    "Tip: set each wallet's opening balance on the Wallets page so the running balances match real life.",
+  );
 }
 
 main()

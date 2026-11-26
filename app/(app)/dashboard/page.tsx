@@ -10,8 +10,10 @@ import {
   longDayLabel,
   monthLabel,
   todayKey,
+  ymdFromISO,
 } from "@/lib/date";
 import StatCard from "@/components/StatCard";
+import WalletCard from "@/components/WalletCard";
 import FlowChart from "@/components/FlowChart";
 import { Skeleton, SkeletonCards } from "@/components/Skeleton";
 
@@ -155,6 +157,53 @@ export default function DashboardPage() {
               hint="earnings − expenses"
             />
           </>
+        )}
+      </div>
+
+      {/* ── Wallets ── */}
+      <div className="rounded-2xl border border-slate-200 bg-surface p-5 shadow-sm">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-bold text-slate-800">My Wallets</h2>
+            <p className="text-xs text-slate-400">
+              {data
+                ? `${formatPeso(data.walletTotals.totalCents)} across ${data.walletTotals.walletCount} wallet${data.walletTotals.walletCount === 1 ? "" : "s"}${data.walletTotals.lowCount > 0 ? ` · ${data.walletTotals.lowCount} running low` : ""}`
+                : "Loading…"}
+            </p>
+          </div>
+          <Link
+            href="/wallets"
+            className="rounded-lg border border-slate-300 bg-surface px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:border-brand hover:text-brand-dark"
+          >
+            Manage &amp; move money
+          </Link>
+        </div>
+
+        {loading || !data ? (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-24 w-full rounded-2xl" />
+            ))}
+          </div>
+        ) : data.wallets.length === 0 ? (
+          <p className="py-6 text-center text-sm text-slate-400">
+            No wallets yet.{" "}
+            <Link href="/wallets" className="text-brand hover:underline">
+              Add Security Bank, GoTyme or GCash
+            </Link>{" "}
+            to track where your money sits.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {data.wallets.map((w) => (
+              <WalletCard
+                key={w.id}
+                wallet={w}
+                href={`/wallets/${w.id}`}
+                compact
+              />
+            ))}
+          </div>
         )}
       </div>
 
@@ -304,7 +353,7 @@ export default function DashboardPage() {
                       {e.category?.name ?? "Uncategorised"}
                     </p>
                     <p className="truncate text-xs text-slate-400">
-                      {longDayLabel(e.date.slice(0, 10))}
+                      {longDayLabel(ymdFromISO(e.date))}
                       {e.note ? ` · ${e.note}` : ""}
                     </p>
                   </div>

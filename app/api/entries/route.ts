@@ -6,11 +6,16 @@ import { pesosToCents } from "@/lib/money";
 import { isYmd, manilaDayStartUTC, manilaRangeUTC } from "@/lib/date";
 import type { EntryKind } from "@/generated/prisma/client";
 
+const ENTRY_INCLUDE = {
+  category: { select: { id: true, name: true, color: true } },
+  wallet: { select: { id: true, name: true, icon: true, color: true } },
+};
+
 function parseKind(raw: string | null): EntryKind | null {
   return raw === "EARNING" || raw === "EXPENSE" ? raw : null;
 }
 
-/** GET /api/entries?kind=EARNING&from=YYYY-MM-DD&to=YYYY-MM-DD&limit=200 */
+/** GET /api/entries?kind=EARNING&from=&to=&walletId=&limit=300 */
 export async function GET(req: NextRequest) {
   const user = await getCurrentUser();
   if (!user) return unauthorized();
@@ -19,6 +24,7 @@ export async function GET(req: NextRequest) {
   const kind = parseKind(searchParams.get("kind"));
   const from = searchParams.get("from");
   const to = searchParams.get("to");
+  const walletId = searchParams.get("walletId");
   const limit = Math.min(
     Math.max(Number(searchParams.get("limit")) || 300, 1),
     1000,
@@ -28,11 +34,10 @@ export async function GET(req: NextRequest) {
     where: {
       userId: user.sub,
       ...(kind ? { kind } : {}),
+      ...(walletId ? { walletId } : {}),
       ...(isYmd(from) && isYmd(to) ? { date: manilaRangeUTC(from, to) } : {}),
     },
-    include: {
-      category: { select: { id: true, name: true, color: true } },
-    },
+    include: ENTRY_INCLUDE,
     orderBy: [{ date: "desc" }, { createdAt: "desc" }],
     take: limit,
   });
@@ -87,6 +92,15 @@ export async function POST(req: NextRequest) {
     if (!owned) return badRequest("That category does not exist");
   }
 
+  const walletId = body.walletId ? String(body.walletId) : null;
+  if (walletId) {
+    const owned = await prisma.wallet.findFirst({
+      where: { id: walletId, userId: user.sub },
+      select: { id: true },
+    });
+    if (!owned) return badRequest("That wallet does not exist");
+  }
+
   const entry = await prisma.entry.create({
     data: {
       userId: user.sub,
@@ -94,10 +108,10 @@ export async function POST(req: NextRequest) {
       date: manilaDayStartUTC(dateStr),
       amountCents: pesosToCents(amount),
       note: body.note ? String(body.note).trim() || null : null,
-      method: body.method ? String(body.method).trim() || null : null,
       categoryId,
+      walletId,
     },
-    include: { category: { select: { id: true, name: true, color: true } } },
+    include: ENTRY_INCLUDE,
   });
 
   return NextResponse.json({ entry }, { status: 201 });

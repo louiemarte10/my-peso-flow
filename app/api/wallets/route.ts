@@ -1,0 +1,80 @@
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+import { getCurrentUser } from "@/lib/auth";
+import { badRequest, unauthorized } from "@/lib/api";
+import { pesosToCents } from "@/lib/money";
+import { walletSummaries } from "@/lib/wallets";
+import type { WalletType } from "@/generated/prisma/client";
+
+const TYPES = ["BANK", "EWALLET", "CASH", "SAVINGS", "CREDIT"] as const;
+
+function parseType(raw: unknown): WalletType | null {
+  const s = String(raw ?? "");
+  return (TYPES as readonly string[]).includes(s) ? (s as WalletType) : null;
+}
+
+/** GET /api/wallets?includeArchived=1 — every wallet with its derived balance. */
+export async function GET(req: NextRequest) {
+  const user = await getCurrentUser();
+  if (!user) return unauthorized();
+
+  const includeArchived =
+    new URL(req.url).searchParams.get("includeArchived") === "1";
+
+  const wallets = await walletSummaries(user.sub, { includeArchived });
+
+  const active = wallets.filter((w) => !w.archived);
+  const totalCents = active.reduce((sum, w) => sum + w.balanceCents, 0);
+
+  return NextResponse.json({
+    wallets,
+    totals: {
+      totalCents,
+      walletCount: active.length,
+      lowCount: active.filter((w) => w.low).length,
+    },
+  });
+}
+
+/** POST /api/wallets */
+export async function POST(req: NextRequest) {
+  const user = await getCurrentUser();
+  if (!user) return unauthorized();
+
+  let body: Record<string, unknown>;
+  try {
+    body = await req.json();
+  } catch {
+    return badRequest("Invalid request body");
+  }
+
+  const name = String(body.name ?? "").trim();
+  if (!name) return badRequest("Enter a wallet name");
+
+  const type = parseType(body.type);
+  if (!type) return badRequest("Choose a wallet type");
+
+  const duplicate = await prisma.wallet.findFirst({
+    where: { userId: user.sub, name },
+    select: { id: true },
+  });
+  if (duplicate) return badRequest(`"${name}" already exists`);
+
+  const count = await prisma.wallet.count({ where: { userId: user.sub } });
+
+  const wallet = await prisma.wallet.create({
+    data: {
+      userId: user.sub,
+      name,
+      type,
+      color: body.color ? String(body.color).trim() : null,
+      icon: body.icon ? String(body.icon).trim() : null,
+      accountRef: body.accountRef ? String(body.accountRef).trim() : null,
+      openingBalanceCents: pesosToCents(Number(body.openingBalance) || 0),
+      lowBalanceCents: pesosToCents(Number(body.lowBalance) || 0),
+      sortOrder: count,
+    },
+  });
+
+  return NextResponse.json({ wallet }, { status: 201 });
+}

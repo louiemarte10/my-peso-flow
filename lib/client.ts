@@ -29,6 +29,8 @@ export const api = {
 
 export type EntryKind = "EARNING" | "EXPENSE";
 
+export type WalletType = "BANK" | "EWALLET" | "CASH" | "SAVINGS" | "CREDIT";
+
 export type Category = {
   id: string;
   name: string;
@@ -38,16 +40,86 @@ export type Category = {
   _count?: { entries: number };
 };
 
+export type WalletRef = {
+  id: string;
+  name: string;
+  icon: string | null;
+  color: string | null;
+};
+
+/** A wallet plus everything derived from its movements. */
+export type Wallet = {
+  id: string;
+  name: string;
+  type: WalletType;
+  color: string | null;
+  icon: string | null;
+  accountRef: string | null;
+  openingBalanceCents: number;
+  lowBalanceCents: number;
+  archived: boolean;
+  sortOrder: number;
+
+  balanceCents: number;
+  earningsCents: number;
+  expenseCents: number;
+  transferInCents: number;
+  transferOutCents: number;
+  feesCents: number;
+  movementCount: number;
+
+  recentSpendCents: number;
+  avgDailySpendCents: number;
+  runwayDays: number | null;
+  low: boolean;
+};
+
+export type WalletTotals = {
+  totalCents: number;
+  walletCount: number;
+  lowCount: number;
+};
+
 export type Entry = {
   id: string;
   date: string; // ISO instant of 00:00 Manila for that day
   kind: EntryKind;
   amountCents: number;
   note: string | null;
-  method: string | null;
   categoryId: string | null;
   category?: { id: string; name: string; color: string | null } | null;
+  walletId: string | null;
+  wallet?: WalletRef | null;
   createdAt: string;
+};
+
+export type Transfer = {
+  id: string;
+  date: string;
+  amountCents: number;
+  feeCents: number;
+  note: string | null;
+  fromWalletId: string;
+  toWalletId: string;
+  fromWallet: WalletRef;
+  toWallet: WalletRef;
+  createdAt: string;
+};
+
+/** One row of a wallet's ledger — an entry or one side of a transfer. */
+export type Movement = {
+  id: string;
+  source: "entry" | "transfer";
+  kind: EntryKind | "TRANSFER_IN" | "TRANSFER_OUT";
+  date: string;
+  createdAt: string;
+  label: string;
+  color: string | null;
+  note: string | null;
+  amountCents: number;
+  feeCents: number;
+  deltaCents: number;
+  balanceAfterCents: number;
 };
 
 export type Totals = {
@@ -85,4 +157,14 @@ export type DashboardData = {
   topExpenses: CategorySlice[];
   topEarnings: CategorySlice[];
   recent: Entry[];
+  wallets: Wallet[];
+  walletTotals: WalletTotals;
+};
+
+export const WALLET_TYPE_LABEL: Record<WalletType, string> = {
+  BANK: "Bank",
+  EWALLET: "E-wallet",
+  CASH: "Cash",
+  SAVINGS: "Savings",
+  CREDIT: "Credit",
 };

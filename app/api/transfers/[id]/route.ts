@@ -1,0 +1,107 @@
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@/lib/db";
+import { getCurrentUser } from "@/lib/auth";
+import { badRequest, notFound, unauthorized } from "@/lib/api";
+import { pesosToCents } from "@/lib/money";
+import { isYmd, manilaDayStartUTC } from "@/lib/date";
+
+type Ctx = { params: Promise<{ id: string }> };
+
+const WALLET_PICK = { select: { id: true, name: true, icon: true, color: true } };
+
+/** PATCH /api/transfers/:id */
+export async function PATCH(req: NextRequest, { params }: Ctx) {
+  const user = await getCurrentUser();
+  if (!user) return unauthorized();
+  const { id } = await params;
+
+  const existing = await prisma.transfer.findFirst({
+    where: { id, userId: user.sub },
+  });
+  if (!existing) return notFound("That transfer no longer exists");
+
+  let body: Record<string, unknown>;
+  try {
+    body = await req.json();
+  } catch {
+    return badRequest("Invalid request body");
+  }
+
+  const data: {
+    date?: Date;
+    amountCents?: number;
+    feeCents?: number;
+    note?: string | null;
+    fromWalletId?: string;
+    toWalletId?: string;
+  } = {};
+
+  if (body.date !== undefined) {
+    const dateStr = String(body.date);
+    if (!isYmd(dateStr)) return badRequest("Choose a valid date");
+    data.date = manilaDayStartUTC(dateStr);
+  }
+
+  if (body.amount !== undefined) {
+    const amount = Number(body.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return badRequest("Enter an amount greater than 0");
+    }
+    data.amountCents = pesosToCents(amount);
+  }
+
+  if (body.fee !== undefined) {
+    const fee = Number(body.fee) || 0;
+    if (fee < 0) return badRequest("A fee can't be negative");
+    data.feeCents = pesosToCents(fee);
+  }
+
+  if (body.note !== undefined) {
+    data.note = body.note ? String(body.note).trim() || null : null;
+  }
+
+  const nextFrom =
+    body.fromWalletId !== undefined
+      ? String(body.fromWalletId)
+      : existing.fromWalletId;
+  const nextTo =
+    body.toWalletId !== undefined
+      ? String(body.toWalletId)
+      : existing.toWalletId;
+
+  if (nextFrom === nextTo) return badRequest("Pick two different wallets");
+
+  if (body.fromWalletId !== undefined || body.toWalletId !== undefined) {
+    const owned = await prisma.wallet.findMany({
+      where: { userId: user.sub, id: { in: [nextFrom, nextTo] } },
+      select: { id: true },
+    });
+    if (owned.length !== 2) return badRequest("That wallet does not exist");
+    data.fromWalletId = nextFrom;
+    data.toWalletId = nextTo;
+  }
+
+  const transfer = await prisma.transfer.update({
+    where: { id },
+    data,
+    include: { fromWallet: WALLET_PICK, toWallet: WALLET_PICK },
+  });
+
+  return NextResponse.json({ transfer });
+}
+
+/** DELETE /api/transfers/:id */
+export async function DELETE(_req: NextRequest, { params }: Ctx) {
+  const user = await getCurrentUser();
+  if (!user) return unauthorized();
+  const { id } = await params;
+
+  const existing = await prisma.transfer.findFirst({
+    where: { id, userId: user.sub },
+    select: { id: true },
+  });
+  if (!existing) return notFound("That transfer no longer exists");
+
+  await prisma.transfer.delete({ where: { id } });
+  return NextResponse.json({ ok: true });
+}

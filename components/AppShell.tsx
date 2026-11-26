@@ -10,6 +10,7 @@ type NavItem = { href: string; label: string; icon: string };
 
 const NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: "📊" },
+  { href: "/wallets", label: "My Wallets", icon: "👛" },
   { href: "/earnings", label: "Earnings", icon: "💰" },
   { href: "/expenses", label: "Expenses", icon: "🧾" },
   { href: "/history", label: "All Transactions", icon: "📅" },
@@ -38,7 +39,8 @@ export default function AppShell({
   const nav = (
     <nav className="flex flex-1 flex-col gap-1 p-3">
       {NAV.map((item) => {
-        const active = pathname === item.href;
+        const active =
+          pathname === item.href || pathname.startsWith(`${item.href}/`);
         return (
           <Link
             key={item.href}

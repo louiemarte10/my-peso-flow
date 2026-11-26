@@ -7,6 +7,7 @@ import {
   type Entry,
   type EntryKind,
   type Totals,
+  type Wallet,
 } from "@/lib/client";
 import { formatPeso } from "@/lib/money";
 import {
@@ -14,8 +15,8 @@ import {
   longDayLabel,
   monthStartKey,
   todayKey,
+  ymdFromISO,
 } from "@/lib/date";
-import { METHODS } from "@/lib/defaults";
 import ConfirmModal, { type ConfirmState } from "@/components/ConfirmModal";
 import { SkeletonRows } from "@/components/Skeleton";
 
@@ -23,7 +24,7 @@ type FormState = {
   date: string;
   categoryId: string;
   amount: string;
-  method: string;
+  walletId: string;
   note: string;
 };
 
@@ -51,6 +52,7 @@ export default function EntryManager({
   const accent = isEarning ? "text-income" : "text-outflow";
 
   const [categories, setCategories] = useState<Category[]>([]);
+  const [wallets, setWallets] = useState<Wallet[]>([]);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [totals, setTotals] = useState<Totals>({
     earningsCents: 0,
@@ -73,18 +75,22 @@ export default function EntryManager({
     date: today,
     categoryId: "",
     amount: "",
-    method: "",
+    walletId: "",
     note: "",
   });
 
-  const loadCategories = useCallback(async () => {
-    const { categories } = await api.get<{ categories: Category[] }>(
-      `/api/categories?kind=${kind}`,
-    );
-    setCategories(categories);
+  const loadRefs = useCallback(async () => {
+    const [cats, wals] = await Promise.all([
+      api.get<{ categories: Category[] }>(`/api/categories?kind=${kind}`),
+      api.get<{ wallets: Wallet[] }>("/api/wallets"),
+    ]);
+    const activeWallets = wals.wallets.filter((w) => !w.archived);
+    setCategories(cats.categories);
+    setWallets(activeWallets);
     setForm((f) => ({
       ...f,
-      categoryId: f.categoryId || categories[0]?.id || "",
+      categoryId: f.categoryId || cats.categories[0]?.id || "",
+      walletId: f.walletId || activeWallets[0]?.id || "",
     }));
   }, [kind]);
 
@@ -105,19 +111,19 @@ export default function EntryManager({
     (async () => {
       setLoading(true);
       try {
-        await Promise.all([loadCategories(), loadEntries()]);
+        await Promise.all([loadRefs(), loadEntries()]);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Could not load");
       } finally {
         setLoading(false);
       }
     })();
-  }, [loadCategories, loadEntries]);
+  }, [loadRefs, loadEntries]);
 
   const rangeTotalCents = isEarning ? totals.earningsCents : totals.expenseCents;
 
   const dayCount = useMemo(() => {
-    return new Set(entries.map((e) => e.date.slice(0, 10))).size;
+    return new Set(entries.map((e) => ymdFromISO(e.date))).size;
   }, [entries]);
 
   async function save() {
@@ -138,7 +144,7 @@ export default function EntryManager({
       date: form.date,
       amount,
       categoryId: form.categoryId || null,
-      method: form.method || null,
+      walletId: form.walletId || null,
       note: form.note || null,
     };
 
@@ -149,7 +155,7 @@ export default function EntryManager({
         await api.post("/api/entries", payload);
       }
       resetForm();
-      await loadEntries();
+      await Promise.all([loadRefs(), loadEntries()]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save");
     } finally {
@@ -172,10 +178,10 @@ export default function EntryManager({
     setError("");
     setEditingId(e.id);
     setForm({
-      date: e.date.slice(0, 10),
+      date: ymdFromISO(e.date),
       categoryId: e.categoryId ?? "",
       amount: (e.amountCents / 100).toFixed(2),
-      method: e.method ?? "",
+      walletId: e.walletId ?? "",
       note: e.note ?? "",
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -185,7 +191,7 @@ export default function EntryManager({
     setConfirm({
       title: `Delete this ${isEarning ? "earning" : "expense"}`,
       message: `Remove ${formatPeso(e.amountCents)} on ${longDayLabel(
-        e.date.slice(0, 10),
+        ymdFromISO(e.date),
       )}? This can't be undone.`,
       confirmLabel: "Delete",
       danger: true,
@@ -195,7 +201,7 @@ export default function EntryManager({
           await api.del(`/api/entries/${e.id}`);
           setConfirm(null);
           if (editingId === e.id) resetForm();
-          await loadEntries();
+          await Promise.all([loadRefs(), loadEntries()]);
         } catch (err) {
           setError(err instanceof Error ? err.message : "Could not delete");
           setConfirm(null);
@@ -305,16 +311,17 @@ export default function EntryManager({
             />
           </Field>
 
-          <Field label="Paid via (optional)">
+          <Field label={isEarning ? "Into wallet" : "From wallet"}>
             <select
-              value={form.method}
-              onChange={(e) => setForm({ ...form, method: e.target.value })}
+              value={form.walletId}
+              onChange={(e) => setForm({ ...form, walletId: e.target.value })}
               className={inputCls}
             >
               <option value="">— None —</option>
-              {METHODS.map((m) => (
-                <option key={m} value={m}>
-                  {m}
+              {wallets.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.icon ? `${w.icon} ` : ""}
+                  {w.name}
                 </option>
               ))}
             </select>
@@ -400,7 +407,7 @@ export default function EntryManager({
                 <th className="px-3 py-2.5 font-semibold">Date</th>
                 <th className="px-3 py-2.5 font-semibold">{categoryLabel}</th>
                 <th className="px-3 py-2.5 font-semibold">Note</th>
-                <th className="px-3 py-2.5 font-semibold">Via</th>
+                <th className="px-3 py-2.5 font-semibold">Wallet</th>
                 <th className="px-3 py-2.5 text-right font-semibold">Amount</th>
                 <th className="px-3 py-2.5 text-right font-semibold">Actions</th>
               </tr>
@@ -424,7 +431,7 @@ export default function EntryManager({
                       }`}
                     >
                       <td className="whitespace-nowrap px-3 py-2.5 text-slate-600">
-                        {longDayLabel(e.date.slice(0, 10))}
+                        {longDayLabel(ymdFromISO(e.date))}
                       </td>
                       <td className="px-3 py-2.5">
                         <span className="inline-flex items-center gap-1.5">
@@ -444,8 +451,10 @@ export default function EntryManager({
                       <td className="max-w-[16rem] truncate px-3 py-2.5 text-slate-500">
                         {e.note ?? "—"}
                       </td>
-                      <td className="px-3 py-2.5 text-slate-500">
-                        {e.method ?? "—"}
+                      <td className="whitespace-nowrap px-3 py-2.5 text-slate-500">
+                        {e.wallet
+                          ? `${e.wallet.icon ?? "👛"} ${e.wallet.name}`
+                          : "—"}
                       </td>
                       <td className={`px-3 py-2.5 text-right font-semibold tabular-nums ${accent}`}>
                         {formatPeso(e.amountCents)}
