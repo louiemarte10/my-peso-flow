@@ -40,7 +40,6 @@ export async function GET(req: NextRequest) {
   }
 
   if (!profile.emailVerified) return fail(req, "email_unverified");
-  if (!emailAllowed(profile.email)) return fail(req, "not_allowed");
 
   // Match on googleId first, then on email so an existing password account
   // simply gains Google sign-in instead of becoming a duplicate.
@@ -48,8 +47,14 @@ export async function GET(req: NextRequest) {
     (await prisma.user.findUnique({ where: { googleId: profile.sub } })) ??
     (await prisma.user.findUnique({ where: { email: profile.email } }));
 
+  // ALLOWED_EMAILS governs who may CREATE an account by signing in with
+  // Google. Someone an admin already made an account for is allowed in
+  // regardless, otherwise every new person would also need an env change.
+  if (!existing && !emailAllowed(profile.email)) {
+    return fail(req, "not_allowed");
+  }
+
   let user;
-  let isNew = false;
 
   if (existing) {
     if (!existing.active) return fail(req, "account_disabled");
@@ -62,18 +67,21 @@ export async function GET(req: NextRequest) {
       },
     });
   } else {
-    user = await prisma.user.create({
-      data: {
-        name: profile.name,
-        email: profile.email,
-        googleId: profile.sub,
-        imageUrl: profile.picture,
-      },
+    // Account + starter data in one transaction, so a failure can't leave a
+    // half-built account behind.
+    user = await prisma.$transaction(async (tx) => {
+      const created = await tx.user.create({
+        data: {
+          name: profile.name,
+          email: profile.email,
+          googleId: profile.sub,
+          imageUrl: profile.picture,
+        },
+      });
+      await seedStarterData(created.id, tx);
+      return created;
     });
-    isNew = true;
   }
-
-  if (isNew) await seedStarterData(user.id);
 
   await setSessionCookie({
     sub: user.id,

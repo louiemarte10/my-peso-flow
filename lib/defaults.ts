@@ -6,6 +6,8 @@ export type SeedCategory = {
   name: string;
   kind: "EARNING" | "EXPENSE";
   color: string;
+  /** Catch-all buckets make the note mandatory — see Category.requiresDetail. */
+  requiresDetail?: boolean;
 };
 
 export const DEFAULT_CATEGORIES: SeedCategory[] = [
@@ -14,7 +16,7 @@ export const DEFAULT_CATEGORIES: SeedCategory[] = [
   { name: "Freelance", kind: "EARNING", color: "#2E9BD6" },
   { name: "Business", kind: "EARNING", color: "#55A5D4" },
   { name: "Bonus / 13th Month", kind: "EARNING", color: "#1D4ED8" },
-  { name: "Other Income", kind: "EARNING", color: "#7DBEE3" },
+  { name: "Other Income", kind: "EARNING", color: "#7DBEE3", requiresDetail: true },
 
   // Money out
   { name: "Food & Groceries", kind: "EXPENSE", color: "#EF4444" },
@@ -24,10 +26,10 @@ export const DEFAULT_CATEGORIES: SeedCategory[] = [
   { name: "Load & Internet", kind: "EXPENSE", color: "#06B6D4" },
   { name: "Health", kind: "EXPENSE", color: "#10B981" },
   { name: "Family / Padala", kind: "EXPENSE", color: "#EC4899" },
-  { name: "Shopping", kind: "EXPENSE", color: "#8B5CF6" },
+  { name: "Shopping", kind: "EXPENSE", color: "#8B5CF6", requiresDetail: true },
   { name: "Savings & Investment", kind: "EXPENSE", color: "#6366F1" },
   { name: "Fees & Charges", kind: "EXPENSE", color: "#94A3B8" },
-  { name: "Others", kind: "EXPENSE", color: "#64748B" },
+  { name: "Others", kind: "EXPENSE", color: "#64748B", requiresDetail: true },
 ];
 
 export type SeedWallet = {

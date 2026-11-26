@@ -3,10 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { api } from "@/lib/client";
+import { api, type Role } from "@/lib/client";
 import ThemeToggle from "@/components/ThemeToggle";
 
-type NavItem = { href: string; label: string; icon: string };
+type NavItem = { href: string; label: string; icon: string; admin?: boolean };
 
 const NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: "📊" },
@@ -15,6 +15,7 @@ const NAV: NavItem[] = [
   { href: "/expenses", label: "Expenses", icon: "🧾" },
   { href: "/history", label: "All Transactions", icon: "📅" },
   { href: "/categories", label: "Categories", icon: "🏷️" },
+  { href: "/users", label: "People", icon: "👥", admin: true },
   { href: "/settings", label: "Settings", icon: "⚙️" },
   { href: "/guide", label: "How to Use", icon: "📘" },
 ];
@@ -23,7 +24,7 @@ export default function AppShell({
   user,
   children,
 }: {
-  user: { name: string; email: string; image: string | null };
+  user: { name: string; email: string; image: string | null; role: Role };
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -36,9 +37,13 @@ export default function AppShell({
     router.refresh();
   }
 
+  // Admin-only destinations are hidden for everyone else. The API enforces it
+  // too — hiding a link is presentation, not a permission check.
+  const items = NAV.filter((n) => !n.admin || user.role === "ADMIN");
+
   const nav = (
     <nav className="flex flex-1 flex-col gap-1 p-3">
-      {NAV.map((item) => {
+      {items.map((item) => {
         const active =
           pathname === item.href || pathname.startsWith(`${item.href}/`);
         return (
@@ -103,7 +108,10 @@ export default function AppShell({
             <p className="truncate text-sm font-semibold text-slate-700">
               {user.name}
             </p>
-            <p className="truncate text-xs text-slate-400">{user.email}</p>
+            <p className="truncate text-xs text-slate-400">
+              {user.role === "ADMIN" ? "Admin · " : ""}
+              {user.email}
+            </p>
           </div>
         </div>
         <button

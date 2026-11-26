@@ -49,6 +49,7 @@ export async function POST(req: NextRequest) {
   if (!name) return badRequest("Enter a category name");
 
   const color = body.color ? String(body.color).trim() : null;
+  const requiresDetail = Boolean(body.requiresDetail);
 
   const duplicate = await prisma.category.findFirst({
     where: { userId: user.sub, kind, name },
@@ -57,7 +58,7 @@ export async function POST(req: NextRequest) {
   if (duplicate) return badRequest(`"${name}" already exists`);
 
   const category = await prisma.category.create({
-    data: { userId: user.sub, kind, name, color },
+    data: { userId: user.sub, kind, name, color, requiresDetail },
     include: { _count: { select: { entries: true } } },
   });
 

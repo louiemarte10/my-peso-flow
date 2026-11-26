@@ -55,7 +55,19 @@ async function main() {
       ? `Account ${email} already existed - left as is.`
       : `Created account ${email} with password: ${password}`,
   );
+  // Bring existing installs in line: the catch-all buckets should demand a
+  // description. createMany above skips rows that already exist, so set it here.
+  let flagged = 0;
+  for (const c of DEFAULT_CATEGORIES.filter((c) => c.requiresDetail)) {
+    const r = await prisma.category.updateMany({
+      where: { userId: user.id, kind: c.kind, name: c.name },
+      data: { requiresDetail: true },
+    });
+    flagged += r.count;
+  }
+
   console.log(`Added ${categories.count} categories and ${wallets.count} wallets.`);
+  console.log(`${flagged} catch-all categories now require a description.`);
   if (!existing) {
     console.log("Sign in, then change the password under Settings.");
   }

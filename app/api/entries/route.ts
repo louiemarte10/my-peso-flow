@@ -83,13 +83,21 @@ export async function POST(req: NextRequest) {
   const dateStr = body.date ? String(body.date) : null;
   if (!isYmd(dateStr)) return badRequest("Choose a valid date");
 
+  const note = body.note ? String(body.note).trim() || null : null;
+
   const categoryId = body.categoryId ? String(body.categoryId) : null;
   if (categoryId) {
     const owned = await prisma.category.findFirst({
       where: { id: categoryId, userId: user.sub, kind },
-      select: { id: true },
+      select: { id: true, name: true, requiresDetail: true },
     });
     if (!owned) return badRequest("That category does not exist");
+    // Catch-all categories are meaningless without a description.
+    if (owned.requiresDetail && !note) {
+      return badRequest(
+        `Say what this was — "${owned.name}" on its own won't mean anything later`,
+      );
+    }
   }
 
   const walletId = body.walletId ? String(body.walletId) : null;
@@ -107,7 +115,7 @@ export async function POST(req: NextRequest) {
       kind,
       date: manilaDayStartUTC(dateStr),
       amountCents: pesosToCents(amount),
-      note: body.note ? String(body.note).trim() || null : null,
+      note,
       categoryId,
       walletId,
     },

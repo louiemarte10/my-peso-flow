@@ -37,7 +37,23 @@ export type Category = {
   kind: EntryKind;
   color: string | null;
   archived: boolean;
+  /** Catch-all category: the note is mandatory when encoding against it. */
+  requiresDetail: boolean;
   _count?: { entries: number };
+};
+
+export type Role = "ADMIN" | "USER";
+
+export type ManagedUser = {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
+  active: boolean;
+  imageUrl: string | null;
+  createdAt: string;
+  googleLinked: boolean;
+  _count: { entries: number; wallets: number };
 };
 
 export type WalletRef = {

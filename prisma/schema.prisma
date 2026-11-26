@@ -49,12 +49,16 @@ model User {
 }
 
 model Category {
-  id        String    @id @default(cuid())
-  name      String
-  kind      EntryKind
-  color     String? // hex used by the charts, e.g. "#0078BF"
-  archived  Boolean   @default(false)
-  createdAt DateTime  @default(now())
+  id       String    @id @default(cuid())
+  name     String
+  kind     EntryKind
+  color    String? // hex used by the charts, e.g. "#0078BF"
+  archived Boolean   @default(false)
+  /// Catch-all categories like "Others" say nothing on their own, so turning
+  /// this on makes the note mandatory when encoding against them — you have to
+  /// write what it actually was.
+  requiresDetail Boolean  @default(false)
+  createdAt      DateTime @default(now())
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)

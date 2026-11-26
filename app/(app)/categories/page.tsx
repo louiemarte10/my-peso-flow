@@ -92,7 +92,11 @@ export default function CategoriesPage() {
         <h1 className="text-xl font-bold text-slate-800">Categories</h1>
         <p className="mt-1 max-w-[75ch] text-sm text-slate-500">
           These are the choices you get when encoding. The colour is what shows
-          in the dashboard breakdown bars.
+          in the dashboard breakdown bars. Tick{" "}
+          <strong>needs details</strong> on a vague catch-all like
+          &ldquo;Others&rdquo; and encoding against it will insist you write
+          what it actually was &mdash; e.g.{" "}
+          <em>6 Marlboro at 11 pesos each</em>.
         </p>
       </div>
 
@@ -272,6 +276,20 @@ function KindPanel({
                   </button>
                 )}
 
+                <label
+                  className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-slate-400"
+                  title={`When on, encoding against "${c.name}" requires you to write what it actually was.`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={c.requiresDetail}
+                    onChange={(e) =>
+                      onUpdate(c.id, { requiresDetail: e.target.checked })
+                    }
+                    className="h-3.5 w-3.5 accent-[var(--color-brand)]"
+                  />
+                  needs details
+                </label>
                 <span className="shrink-0 text-xs text-slate-400">
                   {c._count?.entries ?? 0} used
                 </span>

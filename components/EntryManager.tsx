@@ -79,6 +79,31 @@ export default function EntryManager({
     note: "",
   });
 
+  // Optional "6 x 11.00" helper that fills in the amount for you.
+  const [qty, setQty] = useState("");
+  const [unitPrice, setUnitPrice] = useState("");
+
+  const selectedCategory = categories.find((c) => c.id === form.categoryId);
+  const needsDetail = Boolean(selectedCategory?.requiresDetail);
+
+  const lineTotalCents = Math.round(
+    (parseFloat(qty) || 0) * (parseFloat(unitPrice) || 0) * 100,
+  );
+
+  /** Push the computed total into the amount, and seed the description. */
+  function applyQuickMaths() {
+    if (lineTotalCents <= 0) return;
+    const n = parseFloat(qty) || 0;
+    const each = parseFloat(unitPrice) || 0;
+    setForm((f) => ({
+      ...f,
+      amount: (lineTotalCents / 100).toFixed(2),
+      note: f.note.trim()
+        ? f.note
+        : `${n} x ${formatPeso(Math.round(each * 100))} each`,
+    }));
+  }
+
   const loadRefs = useCallback(async () => {
     const [cats, wals] = await Promise.all([
       api.get<{ categories: Category[] }>(`/api/categories?kind=${kind}`),
@@ -137,6 +162,12 @@ export default function EntryManager({
       setError("Choose a date.");
       return;
     }
+    if (needsDetail && !form.note.trim()) {
+      setError(
+        `Say what this was — "${selectedCategory?.name}" on its own won't mean anything later.`,
+      );
+      return;
+    }
 
     setSaving(true);
     const payload = {
@@ -166,6 +197,8 @@ export default function EntryManager({
   function resetForm() {
     setEditingId(null);
     setError("");
+    setQty("");
+    setUnitPrice("");
     setForm((f) => ({
       ...f,
       date: today,
@@ -327,14 +360,31 @@ export default function EntryManager({
             </select>
           </Field>
 
-          <Field label="Note (optional)" className="col-span-2">
+          <Field
+            label={
+              needsDetail
+                ? `What exactly was it? (required for "${selectedCategory?.name}")`
+                : "Note (optional)"
+            }
+            className="col-span-2"
+          >
             <input
               value={form.note}
               onChange={(e) => setForm({ ...form, note: e.target.value })}
               placeholder={
-                isEarning ? "15th cutoff pay…" : "Groceries at SM…"
+                needsDetail
+                  ? isEarning
+                    ? "e.g. Sold old phone to a workmate"
+                    : "e.g. 6 Marlboro at 11 pesos each"
+                  : isEarning
+                    ? "15th cutoff pay…"
+                    : "Groceries at SM…"
               }
-              className={inputCls}
+              className={`${inputCls} ${
+                needsDetail && !form.note.trim()
+                  ? "border-brand ring-2 ring-brand/20"
+                  : ""
+              }`}
               onKeyDown={(e) => {
                 if (e.key === "Enter") save();
               }}
@@ -350,6 +400,60 @@ export default function EntryManager({
               {saving ? "Saving…" : editingId ? "Update" : "Save entry"}
             </button>
           </div>
+        </div>
+
+        {/* Quantity x unit price -> amount. Handy for things bought by the
+            piece, e.g. 6 sticks at 11.00 each. */}
+        <div className="mt-3 flex flex-wrap items-end gap-2 rounded-xl bg-ice p-3">
+          <span className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+            Quick maths
+          </span>
+          <div className="w-20">
+            <label className="mb-1 block text-xs font-medium text-slate-500">
+              Qty
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              inputMode="numeric"
+              value={qty}
+              onChange={(e) => setQty(e.target.value)}
+              placeholder="6"
+              className={inputCls}
+            />
+          </div>
+          <span className="pb-2 text-slate-400">x</span>
+          <div className="w-28">
+            <label className="mb-1 block text-xs font-medium text-slate-500">
+              Price each
+            </label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              inputMode="decimal"
+              value={unitPrice}
+              onChange={(e) => setUnitPrice(e.target.value)}
+              placeholder="11.00"
+              className={inputCls}
+            />
+          </div>
+          <span className="pb-2 text-slate-400">=</span>
+          <span className="pb-2 font-bold tabular-nums text-slate-700">
+            {formatPeso(lineTotalCents)}
+          </span>
+          <button
+            type="button"
+            onClick={applyQuickMaths}
+            disabled={lineTotalCents <= 0}
+            className="mb-0.5 rounded-lg border border-slate-300 bg-surface px-3 py-2 text-xs font-semibold text-slate-600 transition hover:border-brand hover:text-brand-dark disabled:opacity-40"
+          >
+            Use as amount
+          </button>
+          <span className="pb-2 text-xs text-slate-400">
+            fills the amount{needsDetail ? " and the description" : ""}
+          </span>
         </div>
       </div>
 

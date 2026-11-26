@@ -172,6 +172,24 @@ export default function GuidePage() {
             corrects itself.
           </li>
           <li>
+            <strong className="text-slate-700">Vague categories ask back.</strong>{" "}
+            Tick <em>needs details</em> on a catch-all like
+            &ldquo;Others&rdquo; and encoding against it insists you write what
+            it actually was &mdash; e.g.{" "}
+            <em>6 Marlboro at 11 pesos each</em>. The{" "}
+            <em>Quick maths</em> box beside the form turns a quantity and a
+            price each into the amount for you.
+          </li>
+          <li>
+            <strong className="text-slate-700">Everyone has their own books.</strong>{" "}
+            An admin can create accounts under{" "}
+            <Link href="/users" className="text-brand hover:underline">
+              People
+            </Link>
+            . Each person gets their own wallets, categories and ledger, and
+            nobody can see anyone else&apos;s &mdash; admins included.
+          </li>
+          <li>
             <strong className="text-slate-700">When to withdraw.</strong> Each
             wallet shows what you spend from it per day over the last 30 days
             and roughly how many days that balance lasts. Set a{" "}

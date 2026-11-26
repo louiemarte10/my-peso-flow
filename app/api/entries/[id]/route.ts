@@ -68,6 +68,23 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     data.categoryId = categoryId;
   }
 
+  // An edit must not be able to strip the description off a catch-all
+  // category, whether by clearing the note or by switching category.
+  const finalCategoryId =
+    data.categoryId !== undefined ? data.categoryId : existing.categoryId;
+  const finalNote = data.note !== undefined ? data.note : existing.note;
+  if (finalCategoryId) {
+    const cat = await prisma.category.findUnique({
+      where: { id: finalCategoryId },
+      select: { name: true, requiresDetail: true },
+    });
+    if (cat?.requiresDetail && !finalNote) {
+      return badRequest(
+        `Say what this was — "${cat.name}" on its own won't mean anything later`,
+      );
+    }
+  }
+
   if (body.walletId !== undefined) {
     const walletId = body.walletId ? String(body.walletId) : null;
     if (walletId) {

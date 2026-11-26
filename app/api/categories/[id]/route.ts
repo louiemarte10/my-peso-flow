@@ -23,7 +23,12 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     return badRequest("Invalid request body");
   }
 
-  const data: { name?: string; color?: string | null; archived?: boolean } = {};
+  const data: {
+    name?: string;
+    color?: string | null;
+    archived?: boolean;
+    requiresDetail?: boolean;
+  } = {};
 
   if (body.name !== undefined) {
     const name = String(body.name).trim();
@@ -46,6 +51,9 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   }
   if (body.archived !== undefined) {
     data.archived = Boolean(body.archived);
+  }
+  if (body.requiresDetail !== undefined) {
+    data.requiresDetail = Boolean(body.requiresDetail);
   }
 
   const category = await prisma.category.update({
