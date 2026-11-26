@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentAdmin, setSessionCookie } from "@/lib/auth";
 import { badRequest, notFound, unauthorized } from "@/lib/api";
+import { logActivityFor } from "@/lib/activity";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -43,6 +44,13 @@ export async function POST(_req: NextRequest, { params }: Ctx) {
     email: target.email,
     image: target.imageUrl,
     act: admin.id,
+  });
+
+  await logActivityFor(admin, {
+    action: "admin.impersonate",
+    summary: `Started using "Log in as" for ${target.name} (${target.email})`,
+    targetType: "User",
+    targetId: target.id,
   });
 
   return NextResponse.json({

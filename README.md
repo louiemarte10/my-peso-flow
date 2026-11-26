@@ -19,6 +19,10 @@ Prisma 7 + Neon Postgres + Tailwind 4**.
   passwords, enable/disable, and **Log in as** someone to encode on their
   behalf with a banner and a one-click way back. **View books** is a read-only
   summary of one person's figures.
+- **Activity** (admin only) - an append-only record of who did what, filterable
+  by person and by kind of action. The actor's name and email are copied onto
+  each row, so deleting an account does not erase the history of what it did.
+  It records that something happened, not the contents of anyone's ledger.
 - **Archived** - archiving is the default instead of deleting. Archived rows
   count towards nothing and wait on the Archived page until you **Restore** or
   **Delete forever**.
@@ -60,6 +64,8 @@ Prisma 7 + Neon Postgres + Tailwind 4**.
 | Middleware | This project uses `proxy.ts` (Next 16 naming), not `middleware.ts`. |
 | Archiving | `archivedAt` timestamp, never a hard delete. **Every query feeding a number must carry `LIVE` from `lib/archive.ts`** - miss one and a balance silently disagrees with its own ledger. |
 | Roles | Read from the database per request, never from the session cookie, so promoting or disabling someone takes effect immediately. |
+| Category limit | A plain USER may keep `USER_CATEGORY_LIMIT` (15) live categories; archived ones don't count, and admins are uncapped. The starter set is 12 so a new account has room. |
+| Activity logging | Best effort and awaited, never fired and forgotten - a frozen serverless function would drop a floating promise, and a failed log must never break the action it was recording. |
 | Impersonation | The session's `act` claim holds the real admin. An impersonated session is never treated as admin. |
 
 ## Setup

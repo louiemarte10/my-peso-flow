@@ -1,6 +1,9 @@
 // Starter categories and wallets created for every new account, so the encode
 // pages are usable the moment you sign in. Rename, add or archive them later on
 // the Categories and Wallets pages.
+//
+// The category list is kept comfortably under USER_CATEGORY_LIMIT so a new
+// account starts with room to add its own, rather than already at the cap.
 
 export type SeedCategory = {
   name: string;
@@ -14,8 +17,6 @@ export const DEFAULT_CATEGORIES: SeedCategory[] = [
   // Money in
   { name: "Salary", kind: "EARNING", color: "#0078BF" },
   { name: "Freelance", kind: "EARNING", color: "#2E9BD6" },
-  { name: "Business", kind: "EARNING", color: "#55A5D4" },
-  { name: "Bonus / 13th Month", kind: "EARNING", color: "#1D4ED8" },
   { name: "Other Income", kind: "EARNING", color: "#7DBEE3", requiresDetail: true },
 
   // Money out
@@ -26,9 +27,7 @@ export const DEFAULT_CATEGORIES: SeedCategory[] = [
   { name: "Load & Internet", kind: "EXPENSE", color: "#06B6D4" },
   { name: "Health", kind: "EXPENSE", color: "#10B981" },
   { name: "Family / Padala", kind: "EXPENSE", color: "#EC4899" },
-  { name: "Shopping", kind: "EXPENSE", color: "#8B5CF6", requiresDetail: true },
   { name: "Savings & Investment", kind: "EXPENSE", color: "#6366F1" },
-  { name: "Fees & Charges", kind: "EXPENSE", color: "#94A3B8" },
   { name: "Others", kind: "EXPENSE", color: "#64748B", requiresDetail: true },
 ];
 

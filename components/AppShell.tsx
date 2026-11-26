@@ -17,6 +17,7 @@ const NAV: NavItem[] = [
   { href: "/categories", label: "Categories", icon: "🏷️" },
   { href: "/archived", label: "Archived", icon: "🗃️" },
   { href: "/users", label: "People", icon: "👥", admin: true },
+  { href: "/activity", label: "Activity", icon: "📜", admin: true },
   { href: "/settings", label: "Settings", icon: "⚙️" },
   { href: "/guide", label: "How to Use", icon: "📘" },
 ];

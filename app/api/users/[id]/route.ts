@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentAdmin, hashPassword } from "@/lib/auth";
 import { badRequest, notFound, unauthorized } from "@/lib/api";
+import { logActivityFor } from "@/lib/activity";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -120,6 +121,21 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     select: USER_PICK,
   });
 
+  const changed = [
+    data.name !== undefined && "name",
+    data.email !== undefined && "email",
+    data.role !== undefined && `role to ${data.role}`,
+    data.active !== undefined && (data.active ? "enabled" : "disabled"),
+    data.passwordHash !== undefined && "password reset",
+  ].filter(Boolean) as string[];
+
+  await logActivityFor(admin, {
+    action: "admin.user.update",
+    summary: `Changed ${changed.join(", ") || "nothing"} for ${user.name} (${user.email})`,
+    targetType: "User",
+    targetId: user.id,
+  });
+
   return NextResponse.json({ user: shape(user) });
 }
 
@@ -139,7 +155,7 @@ export async function DELETE(_req: NextRequest, { params }: Ctx) {
 
   const target = await prisma.user.findUnique({
     where: { id },
-    select: { id: true, role: true },
+    select: { id: true, role: true, name: true, email: true },
   });
   if (!target) return notFound("That account no longer exists");
 
@@ -148,5 +164,11 @@ export async function DELETE(_req: NextRequest, { params }: Ctx) {
   }
 
   await prisma.user.delete({ where: { id } });
+  await logActivityFor(admin, {
+    action: "admin.user.delete",
+    summary: `Deleted the account of ${target.name} (${target.email}) and all its data`,
+    targetType: "User",
+    targetId: id,
+  });
   return NextResponse.json({ ok: true });
 }

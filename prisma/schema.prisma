@@ -46,6 +46,36 @@ model User {
   entries    Entry[]
   wallets    Wallet[]
   transfers  Transfer[]
+  activity   ActivityLog[]
+}
+
+/// An append-only record of who did what, for the admin Activity page.
+/// The actor's name and email are copied in rather than only referenced, so a
+/// deleted account does not erase the history of what it did.
+model ActivityLog {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  actorName  String
+  actorEmail String
+  /// "entry.create", "category.archive", "auth.login", ...
+  action  String
+  /// One readable sentence, written at the time it happened.
+  summary String
+
+  targetType String? // Entry | Transfer | Wallet | Category | User | Account
+  targetId   String?
+
+  /// Set when an admin did this while using "Log in as".
+  impersonatedByEmail String?
+
+  /// Null once the account is deleted; the snapshot above still stands.
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([userId, createdAt])
+  @@index([action, createdAt])
 }
 
 model Category {

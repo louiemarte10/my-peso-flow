@@ -4,6 +4,9 @@ import { getCurrentUser } from "@/lib/auth";
 import { badRequest, unauthorized } from "@/lib/api";
 import type { EntryKind } from "@/generated/prisma/client";
 import { shapeArchivable } from "@/lib/archive";
+import { USER_CATEGORY_LIMIT } from "@/lib/config";
+import { getCurrentUserRecord } from "@/lib/auth";
+import { logActivity } from "@/lib/activity";
 
 function parseKind(raw: string | null): EntryKind | null {
   return raw === "EARNING" || raw === "EXPENSE" ? raw : null;
@@ -59,9 +62,30 @@ export async function POST(req: NextRequest) {
   });
   if (duplicate) return badRequest(`"${name}" already exists`);
 
+  // Plain accounts are capped. Archived categories don't count, so the way
+  // past the limit is to archive one you no longer use.
+  const me = await getCurrentUserRecord();
+  if (me && me.role !== "ADMIN") {
+    const live = await prisma.category.count({
+      where: { userId: user.sub, archivedAt: null },
+    });
+    if (live >= USER_CATEGORY_LIMIT) {
+      return badRequest(
+        `You already have ${live} of ${USER_CATEGORY_LIMIT} categories. Archive one you no longer use, then add this.`,
+      );
+    }
+  }
+
   const category = await prisma.category.create({
     data: { userId: user.sub, kind, name, color, requiresDetail },
     include: { _count: { select: { entries: true } } },
+  });
+
+  await logActivity(user, {
+    action: "category.create",
+    summary: `Added the ${kind === "EARNING" ? "earning source" : "expense category"} "${name}"`,
+    targetType: "Category",
+    targetId: category.id,
   });
 
   return NextResponse.json({ category: shapeArchivable(category) }, { status: 201 });

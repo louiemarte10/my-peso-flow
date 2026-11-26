@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { badRequest, notFound, unauthorized } from "@/lib/api";
-import { pesosToCents } from "@/lib/money";
+import { formatPeso, pesosToCents } from "@/lib/money";
 import { isYmd, manilaDayStartUTC } from "@/lib/date";
+import { logActivity } from "@/lib/activity";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -92,6 +93,13 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     include: { fromWallet: WALLET_PICK, toWallet: WALLET_PICK },
   });
 
+  await logActivity(user, {
+    action: body.archived === false ? "transfer.restore" : "transfer.update",
+    summary: `${body.archived === false ? "Restored" : "Edited"} the move of ${formatPeso(transfer.amountCents)}`,
+    targetType: "Transfer",
+    targetId: transfer.id,
+  });
+
   return NextResponse.json({ transfer });
 }
 
@@ -103,18 +111,30 @@ export async function DELETE(req: NextRequest, { params }: Ctx) {
 
   const existing = await prisma.transfer.findFirst({
     where: { id, userId: user.sub },
-    select: { id: true },
+    select: { id: true, amountCents: true },
   });
   if (!existing) return notFound("That transfer no longer exists");
 
   if (new URL(req.url).searchParams.get("purge") === "1") {
     await prisma.transfer.delete({ where: { id } });
+    await logActivity(user, {
+      action: "transfer.delete",
+      summary: `Deleted a move of ${formatPeso(existing.amountCents)} for good`,
+      targetType: "Transfer",
+      targetId: id,
+    });
     return NextResponse.json({ ok: true, purged: true });
   }
 
   await prisma.transfer.update({
     where: { id },
     data: { archivedAt: new Date() },
+  });
+  await logActivity(user, {
+    action: "transfer.archive",
+    summary: `Archived a move of ${formatPeso(existing.amountCents)}`,
+    targetType: "Transfer",
+    targetId: id,
   });
   return NextResponse.json({ ok: true, archived: true });
 }

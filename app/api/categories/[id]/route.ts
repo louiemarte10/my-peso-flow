@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { badRequest, notFound, unauthorized } from "@/lib/api";
 import { shapeArchivable } from "@/lib/archive";
+import { logActivity } from "@/lib/activity";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -63,6 +64,18 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     include: { _count: { select: { entries: true } } },
   });
 
+  await logActivity(user, {
+    action: data.archivedAt === null && body.archived !== undefined
+      ? "category.restore"
+      : "category.update",
+    summary:
+      data.archivedAt === null && body.archived !== undefined
+        ? `Restored the category "${category.name}"`
+        : `Edited the category "${category.name}"`,
+    targetType: "Category",
+    targetId: category.id,
+  });
+
   return NextResponse.json({ category: shapeArchivable(category) });
 }
 
@@ -96,9 +109,21 @@ export async function DELETE(req: NextRequest, { params }: Ctx) {
       data: { archivedAt: new Date() },
       include: { _count: { select: { entries: true } } },
     });
+    await logActivity(user, {
+      action: "category.archive",
+      summary: `Archived the category "${existing.name}"`,
+      targetType: "Category",
+      targetId: id,
+    });
     return NextResponse.json({ archived: true, category: shapeArchivable(category) });
   }
 
   await prisma.category.delete({ where: { id } });
+  await logActivity(user, {
+    action: "category.delete",
+    summary: `Deleted the category "${existing.name}" for good`,
+    targetType: "Category",
+    targetId: id,
+  });
   return NextResponse.json({ ok: true, archived: false });
 }

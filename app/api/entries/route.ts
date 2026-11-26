@@ -5,6 +5,8 @@ import { badRequest, unauthorized } from "@/lib/api";
 import { pesosToCents } from "@/lib/money";
 import { isYmd, manilaDayStartUTC, manilaRangeUTC } from "@/lib/date";
 import { scopeFilter } from "@/lib/archive";
+import { logActivity } from "@/lib/activity";
+import { formatPeso } from "@/lib/money";
 import type { EntryKind } from "@/generated/prisma/client";
 
 const ENTRY_INCLUDE = {
@@ -123,6 +125,13 @@ export async function POST(req: NextRequest) {
       walletId,
     },
     include: ENTRY_INCLUDE,
+  });
+
+  await logActivity(user, {
+    action: kind === "EARNING" ? "earning.create" : "expense.create",
+    summary: `Encoded ${kind === "EARNING" ? "an earning" : "an expense"} of ${formatPeso(entry.amountCents)}${entry.category ? ` under ${entry.category.name}` : ""}`,
+    targetType: "Entry",
+    targetId: entry.id,
   });
 
   return NextResponse.json({ entry }, { status: 201 });

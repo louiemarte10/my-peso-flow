@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, type Category, type EntryKind } from "@/lib/client";
+import { api, type Category, type EntryKind, type Role } from "@/lib/client";
+import { USER_CATEGORY_LIMIT } from "@/lib/config";
 import ConfirmModal, { type ConfirmState } from "@/components/ConfirmModal";
 import { Skeleton } from "@/components/Skeleton";
 
@@ -20,6 +21,7 @@ const SWATCHES = [
 
 export default function CategoriesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
+  const [role, setRole] = useState<Role>("USER");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [confirm, setConfirm] = useState<ConfirmState | null>(null);
@@ -28,10 +30,12 @@ export default function CategoriesPage() {
   const load = useCallback(async () => {
     setError("");
     try {
-      const { categories } = await api.get<{ categories: Category[] }>(
-        "/api/categories",
-      );
-      setCategories(categories);
+      const [cats, me] = await Promise.all([
+        api.get<{ categories: Category[] }>("/api/categories"),
+        api.get<{ user: { role: Role } }>("/api/me"),
+      ]);
+      setCategories(cats.categories);
+      setRole(me.user.role);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load");
     } finally {
@@ -88,6 +92,10 @@ export default function CategoriesPage() {
     });
   }
 
+  // The cap counts live categories across both kinds; archived ones are free.
+  const liveCount = categories.filter((c) => !c.archived).length;
+  const atLimit = role !== "ADMIN" && liveCount >= USER_CATEGORY_LIMIT;
+
   return (
     <div className="space-y-5">
       <div>
@@ -113,12 +121,40 @@ export default function CategoriesPage() {
         </div>
       )}
 
+      {role !== "ADMIN" && (
+        <div
+          className={`rounded-2xl border px-4 py-3 text-sm ${
+            atLimit
+              ? "border-amber-300 bg-amber-50 text-amber-900"
+              : "border-slate-200 bg-surface text-slate-500"
+          }`}
+        >
+          <strong className="text-slate-700">
+            {liveCount} of {USER_CATEGORY_LIMIT}
+          </strong>{" "}
+          categories used.{" "}
+          {atLimit ? (
+            <>
+              You have reached the limit — archive one you no longer use and the
+              slot frees up straight away. Archiving keeps all its past entries.
+            </>
+          ) : (
+            <>
+              {USER_CATEGORY_LIMIT - liveCount} slot
+              {USER_CATEGORY_LIMIT - liveCount === 1 ? "" : "s"} left. Archived
+              categories do not count towards this.
+            </>
+          )}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <KindPanel
           kind="EARNING"
           title="Earning sources"
           categories={categories.filter((c) => c.kind === "EARNING")}
           loading={loading}
+          atLimit={atLimit}
           onCreate={create}
           onUpdate={update}
           onDelete={requestDelete}
@@ -128,6 +164,7 @@ export default function CategoriesPage() {
           title="Expense categories"
           categories={categories.filter((c) => c.kind === "EXPENSE")}
           loading={loading}
+          atLimit={atLimit}
           onCreate={create}
           onUpdate={update}
           onDelete={requestDelete}
@@ -148,6 +185,7 @@ function KindPanel({
   title,
   categories,
   loading,
+  atLimit,
   onCreate,
   onUpdate,
   onDelete,
@@ -156,6 +194,8 @@ function KindPanel({
   title: string;
   categories: Category[];
   loading: boolean;
+  /** True when this account has used up its category allowance. */
+  atLimit: boolean;
   onCreate: (kind: EntryKind, name: string, color: string) => Promise<void>;
   onUpdate: (id: string, patch: Partial<Category>) => Promise<void>;
   onDelete: (c: Category) => void;
@@ -170,6 +210,10 @@ function KindPanel({
   async function add() {
     const trimmed = name.trim();
     if (!trimmed) return;
+    if (atLimit) {
+      setError("You have reached your category limit. Archive one first.");
+      return;
+    }
     setSaving(true);
     setError("");
     try {
@@ -208,7 +252,10 @@ function KindPanel({
           onKeyDown={(e) => {
             if (e.key === "Enter") add();
           }}
-          placeholder="New category name…"
+          disabled={atLimit}
+          placeholder={
+            atLimit ? "Limit reached — archive one first" : "New category name…"
+          }
           className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-surface px-3 py-2 text-sm text-slate-800 outline-none focus:border-brand focus:ring-2 focus:ring-brand/30"
         />
         <div className="flex items-center gap-1">
@@ -226,7 +273,7 @@ function KindPanel({
         </div>
         <button
           onClick={add}
-          disabled={saving || !name.trim()}
+          disabled={saving || !name.trim() || atLimit}
           className="rounded-lg bg-brand px-3 py-2 text-sm font-semibold text-white transition hover:bg-brand-dark disabled:opacity-40"
         >
           Add

@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { badRequest, unauthorized } from "@/lib/api";
-import { pesosToCents } from "@/lib/money";
+import { formatPeso, pesosToCents } from "@/lib/money";
 import { isYmd, manilaDayStartUTC, manilaRangeUTC } from "@/lib/date";
 import { scopeFilter } from "@/lib/archive";
+import { logActivity } from "@/lib/activity";
 
 const WALLET_PICK = { select: { id: true, name: true, icon: true, color: true, logo: true } };
 
@@ -94,6 +95,13 @@ export async function POST(req: NextRequest) {
       note: body.note ? String(body.note).trim() || null : null,
     },
     include: { fromWallet: WALLET_PICK, toWallet: WALLET_PICK },
+  });
+
+  await logActivity(user, {
+    action: "transfer.create",
+    summary: `Moved ${formatPeso(transfer.amountCents)} from ${transfer.fromWallet.name} to ${transfer.toWallet.name}`,
+    targetType: "Transfer",
+    targetId: transfer.id,
   });
 
   return NextResponse.json({ transfer }, { status: 201 });

@@ -5,6 +5,7 @@ import { badRequest, unauthorized } from "@/lib/api";
 import { pesosToCents } from "@/lib/money";
 import { walletSummaries } from "@/lib/wallets";
 import { checkLogo } from "@/lib/logo";
+import { logActivity } from "@/lib/activity";
 import type { WalletType } from "@/generated/prisma/client";
 
 const TYPES = ["BANK", "EWALLET", "CASH", "SAVINGS", "CREDIT"] as const;
@@ -79,6 +80,13 @@ export async function POST(req: NextRequest) {
       lowBalanceCents: pesosToCents(Number(body.lowBalance) || 0),
       sortOrder: count,
     },
+  });
+
+  await logActivity(user, {
+    action: "wallet.create",
+    summary: `Added the wallet "${wallet.name}"`,
+    targetType: "Wallet",
+    targetId: wallet.id,
   });
 
   return NextResponse.json({ wallet }, { status: 201 });

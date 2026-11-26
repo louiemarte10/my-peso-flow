@@ -4,6 +4,7 @@ import { hashPassword } from "@/lib/auth";
 import { badRequest } from "@/lib/api";
 import { seedStarterData } from "@/lib/users";
 import { EMAIL_TAKEN, signupEnabled } from "@/lib/config";
+import { logActivityFor } from "@/lib/activity";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -62,6 +63,13 @@ export async function POST(req: NextRequest) {
       });
       await seedStarterData(created.id, tx);
       return created;
+    });
+
+    await logActivityFor(user, {
+      action: "account.signup",
+      summary: "Created their own account",
+      targetType: "Account",
+      targetId: user.id,
     });
 
     return NextResponse.json(

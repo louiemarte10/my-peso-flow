@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { getCurrentUser } from "@/lib/auth";
 import { badRequest, notFound, unauthorized } from "@/lib/api";
-import { pesosToCents } from "@/lib/money";
+import { formatPeso, pesosToCents } from "@/lib/money";
 import { isYmd, manilaDayStartUTC } from "@/lib/date";
+import { logActivity } from "@/lib/activity";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -109,6 +110,24 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     include: ENTRY_INCLUDE,
   });
 
+  await logActivity(user, {
+    action:
+      body.archived === false
+        ? "entry.restore"
+        : body.archived === true
+          ? "entry.archive"
+          : "entry.update",
+    summary: `${
+      body.archived === false
+        ? "Restored"
+        : body.archived === true
+          ? "Archived"
+          : "Edited"
+    } an entry of ${formatPeso(entry.amountCents)}`,
+    targetType: "Entry",
+    targetId: entry.id,
+  });
+
   return NextResponse.json({ entry });
 }
 
@@ -123,18 +142,30 @@ export async function DELETE(req: NextRequest, { params }: Ctx) {
 
   const existing = await prisma.entry.findFirst({
     where: { id, userId: user.sub },
-    select: { id: true },
+    select: { id: true, amountCents: true },
   });
   if (!existing) return notFound("That entry no longer exists");
 
   if (new URL(req.url).searchParams.get("purge") === "1") {
     await prisma.entry.delete({ where: { id } });
+    await logActivity(user, {
+      action: "entry.delete",
+      summary: `Deleted an entry of ${formatPeso(existing.amountCents)} for good`,
+      targetType: "Entry",
+      targetId: id,
+    });
     return NextResponse.json({ ok: true, purged: true });
   }
 
   await prisma.entry.update({
     where: { id },
     data: { archivedAt: new Date() },
+  });
+  await logActivity(user, {
+    action: "entry.archive",
+    summary: `Archived an entry of ${formatPeso(existing.amountCents)}`,
+    targetType: "Entry",
+    targetId: id,
   });
   return NextResponse.json({ ok: true, archived: true });
 }

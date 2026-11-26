@@ -6,6 +6,7 @@ import { pesosToCents } from "@/lib/money";
 import { walletBalance } from "@/lib/wallets";
 import { LIVE } from "@/lib/archive";
 import { checkLogo } from "@/lib/logo";
+import { logActivity } from "@/lib/activity";
 import type { WalletType } from "@/generated/prisma/client";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -209,6 +210,12 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   if (Object.keys(data).length === 0) return badRequest("Nothing to update");
 
   await prisma.wallet.update({ where: { id }, data });
+  await logActivity(user, {
+    action: body.archived === false ? "wallet.restore" : "wallet.update",
+    summary: `${body.archived === false ? "Restored" : "Edited"} the wallet "${data.name ?? existing.name}"`,
+    targetType: "Wallet",
+    targetId: id,
+  });
   const wallet = await walletBalance(user.sub, id);
   return NextResponse.json({ wallet });
 }
@@ -244,9 +251,21 @@ export async function DELETE(req: NextRequest, { params }: Ctx) {
       where: { id },
       data: { archivedAt: new Date() },
     });
+    await logActivity(user, {
+      action: "wallet.archive",
+      summary: `Archived the wallet "${existing.name}"`,
+      targetType: "Wallet",
+      targetId: id,
+    });
     return NextResponse.json({ archived: true });
   }
 
   await prisma.wallet.delete({ where: { id } });
+  await logActivity(user, {
+    action: "wallet.delete",
+    summary: `Deleted the wallet "${existing.name}" for good`,
+    targetType: "Wallet",
+    targetId: id,
+  });
   return NextResponse.json({ ok: true, archived: false });
 }

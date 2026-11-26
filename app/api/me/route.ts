@@ -7,6 +7,7 @@ import {
   verifyPassword,
 } from "@/lib/auth";
 import { badRequest, notFound, unauthorized } from "@/lib/api";
+import { logActivity } from "@/lib/activity";
 
 /** Deliberately permissive — real validation is "can you receive mail there". */
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -25,6 +26,7 @@ export async function GET() {
       imageUrl: true,
       googleId: true,
       passwordHash: true,
+      role: true,
       createdAt: true,
       _count: { select: { entries: true, categories: true, wallets: true } },
     },
@@ -123,6 +125,19 @@ export async function PATCH(req: NextRequest) {
     name: updated.name,
     email: updated.email,
     image: updated.imageUrl,
+  });
+
+  const what = [
+    data.name !== undefined && "display name",
+    data.email !== undefined && "sign-in email",
+    data.passwordHash !== undefined && "password",
+  ].filter(Boolean) as string[];
+
+  await logActivity(session, {
+    action: "account.update",
+    summary: `Changed their ${what.join(" and ")}`,
+    targetType: "Account",
+    targetId: updated.id,
   });
 
   return NextResponse.json({ user: updated });

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { badRequest } from "@/lib/api";
 import { setSessionCookie, verifyPassword } from "@/lib/auth";
+import { logActivityFor } from "@/lib/activity";
 
 export async function POST(req: NextRequest) {
   let body: { email?: string; password?: string };
@@ -30,6 +31,13 @@ export async function POST(req: NextRequest) {
     name: user.name,
     email: user.email,
     image: user.imageUrl,
+  });
+
+  await logActivityFor(user, {
+    action: "auth.login",
+    summary: "Signed in",
+    targetType: "Account",
+    targetId: user.id,
   });
 
   return NextResponse.json({

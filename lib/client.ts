@@ -220,6 +220,21 @@ export type UserOverview = {
   recent: Entry[];
 };
 
+export type ActivityLog = {
+  id: string;
+  createdAt: string;
+  actorName: string;
+  actorEmail: string;
+  action: string;
+  summary: string;
+  targetType: string | null;
+  targetId: string | null;
+  impersonatedByEmail: string | null;
+  userId: string | null;
+};
+
+export type ActivityPerson = { id: string; name: string; email: string };
+
 export const WALLET_TYPE_LABEL: Record<WalletType, string> = {
   BANK: "Bank",
   EWALLET: "E-wallet",

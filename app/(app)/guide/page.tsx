@@ -188,6 +188,13 @@ export default function GuidePage() {
             price each into the amount for you.
           </li>
           <li>
+            <strong className="text-slate-700">You get 15 categories.</strong>{" "}
+            Enough to stay meaningful without becoming a list nobody reads.
+            Archived ones do not count, so if you need a new one, archive
+            something you have stopped using and the slot frees up straight
+            away. Your past entries keep their labels either way.
+          </li>
+          <li>
             <strong className="text-slate-700">Everyone has their own books.</strong>{" "}
             An admin can create accounts under{" "}
             <Link href="/users" className="text-brand hover:underline">

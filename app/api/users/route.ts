@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { getCurrentAdmin, hashPassword } from "@/lib/auth";
 import { badRequest, unauthorized } from "@/lib/api";
 import { seedStarterData } from "@/lib/users";
+import { logActivityFor } from "@/lib/activity";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -94,6 +95,13 @@ export async function POST(req: NextRequest) {
     });
     await seedStarterData(created.id, tx);
     return created;
+  });
+
+  await logActivityFor(admin, {
+    action: "admin.user.create",
+    summary: `Created an account for ${name} (${email}) as ${role}`,
+    targetType: "User",
+    targetId: user.id,
   });
 
   return NextResponse.json({ user: shape(user) }, { status: 201 });
