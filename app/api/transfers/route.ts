@@ -6,7 +6,7 @@ import { pesosToCents } from "@/lib/money";
 import { isYmd, manilaDayStartUTC, manilaRangeUTC } from "@/lib/date";
 import { scopeFilter } from "@/lib/archive";
 
-const WALLET_PICK = { select: { id: true, name: true, icon: true, color: true } };
+const WALLET_PICK = { select: { id: true, name: true, icon: true, color: true, logo: true } };
 
 /** GET /api/transfers?from=&to=&walletId= */
 export async function GET(req: NextRequest) {

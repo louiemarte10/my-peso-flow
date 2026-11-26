@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { WALLET_TYPE_LABEL, type Wallet } from "@/lib/client";
 import { formatPeso } from "@/lib/money";
+import WalletAvatar from "@/components/WalletAvatar";
 
 /** One wallet tile: balance, type, and how long it lasts at your recent rate. */
 export default function WalletCard({
@@ -18,12 +19,7 @@ export default function WalletCard({
     <>
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
-          <span
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-base"
-            style={{ background: `${accent}22` }}
-          >
-            {wallet.icon ?? "👛"}
-          </span>
+          <WalletAvatar wallet={wallet} size="md" />
           <div className="min-w-0">
             <p className="truncate text-sm font-semibold text-slate-800">
               {wallet.name}

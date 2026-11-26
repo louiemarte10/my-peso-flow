@@ -13,6 +13,7 @@ import { formatPeso } from "@/lib/money";
 import { longDayLabel, ymdFromISO } from "@/lib/date";
 import { SPEND_WINDOW_LABEL } from "@/lib/windows";
 import { Skeleton } from "@/components/Skeleton";
+import WalletAvatar from "@/components/WalletAvatar";
 
 type Filter = "ALL" | "IN" | "OUT";
 
@@ -76,8 +77,6 @@ export default function WalletDetailPage() {
     );
   }
 
-  const accent = wallet.color ?? "#0078BF";
-
   return (
     <div className="space-y-5">
       <div>
@@ -88,12 +87,7 @@ export default function WalletDetailPage() {
           ← All wallets
         </Link>
         <div className="mt-2 flex flex-wrap items-center gap-3">
-          <span
-            className="flex h-11 w-11 items-center justify-center rounded-xl text-xl"
-            style={{ background: `${accent}22` }}
-          >
-            {wallet.icon ?? "👛"}
-          </span>
+          <WalletAvatar wallet={wallet} size="lg" />
           <div>
             <h1 className="text-xl font-bold text-slate-800">{wallet.name}</h1>
             <p className="text-sm text-slate-500">

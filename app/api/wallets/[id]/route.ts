@@ -5,6 +5,7 @@ import { badRequest, notFound, unauthorized } from "@/lib/api";
 import { pesosToCents } from "@/lib/money";
 import { walletBalance } from "@/lib/wallets";
 import { LIVE } from "@/lib/archive";
+import { checkLogo } from "@/lib/logo";
 import type { WalletType } from "@/generated/prisma/client";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -152,6 +153,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     type?: WalletType;
     color?: string | null;
     icon?: string | null;
+    logo?: string | null;
     accountRef?: string | null;
     openingBalanceCents?: number;
     lowBalanceCents?: number;
@@ -181,6 +183,11 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   }
   if (body.icon !== undefined) {
     data.icon = body.icon ? String(body.icon).trim() : null;
+  }
+  if (body.logo !== undefined) {
+    const logo = checkLogo(body.logo);
+    if (!logo.ok) return badRequest(logo.error);
+    data.logo = logo.value;
   }
   if (body.accountRef !== undefined) {
     data.accountRef = body.accountRef ? String(body.accountRef).trim() : null;

@@ -72,7 +72,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
       where: { userId: id, ...LIVE },
       include: {
         category: { select: { id: true, name: true, color: true } },
-        wallet: { select: { id: true, name: true, icon: true, color: true } },
+        wallet: { select: { id: true, name: true, icon: true, color: true, logo: true } },
       },
       orderBy: [{ date: "desc" }, { createdAt: "desc" }],
       take: 10,

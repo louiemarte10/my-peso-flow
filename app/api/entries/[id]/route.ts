@@ -9,7 +9,7 @@ type Ctx = { params: Promise<{ id: string }> };
 
 const ENTRY_INCLUDE = {
   category: { select: { id: true, name: true, color: true } },
-  wallet: { select: { id: true, name: true, icon: true, color: true } },
+  wallet: { select: { id: true, name: true, icon: true, color: true, logo: true } },
 };
 
 /** PATCH /api/entries/:id — edit an encoded entry. */

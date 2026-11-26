@@ -12,6 +12,7 @@ export type WalletSummary = {
   type: "BANK" | "EWALLET" | "CASH" | "SAVINGS" | "CREDIT";
   color: string | null;
   icon: string | null;
+  logo: string | null;
   accountRef: string | null;
   openingBalanceCents: number;
   lowBalanceCents: number;
@@ -151,6 +152,7 @@ export async function walletSummaries(
       type: w.type,
       color: w.color,
       icon: w.icon,
+      logo: w.logo,
       accountRef: w.accountRef,
       openingBalanceCents: w.openingBalanceCents,
       lowBalanceCents: w.lowBalanceCents,

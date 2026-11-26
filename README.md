@@ -27,7 +27,9 @@ Prisma 7 + Neon Postgres + Tailwind 4**.
   wallet balances. The chart switches between 7-day, month and year, and steps
   back through past periods.
 - **My Wallets** — one card per place money sits (Security Bank, GoTyme, GCash,
-  cash on hand). Balances are *derived*, never typed: opening balance + money in
+  cash on hand), each with its real logo: upload a PNG/JPG/WEBP/SVG and the
+  browser shrinks it to a 128px square stored inline (the host filesystem is
+  read-only, so there are no image files to serve). An emoji is the fallback. Balances are *derived*, never typed: opening balance + money in
   − money out. Each wallet shows its 30-day spend rate, roughly how many days
   the balance lasts, and flags itself when it drops below the mark you set.
   Open a wallet for its full ledger with a running balance after every movement.

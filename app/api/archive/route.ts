@@ -4,7 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { unauthorized } from "@/lib/api";
 import { ARCHIVED } from "@/lib/archive";
 
-const WALLET_PICK = { select: { id: true, name: true, icon: true, color: true } };
+const WALLET_PICK = { select: { id: true, name: true, icon: true, color: true, logo: true } };
 
 /**
  * GET /api/archive — everything this user has archived, in one payload, so the

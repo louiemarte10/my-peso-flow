@@ -126,7 +126,7 @@ export async function GET(req: NextRequest) {
         where: { userId: user.sub, ...LIVE },
         include: {
           category: { select: { id: true, name: true, color: true } },
-          wallet: { select: { id: true, name: true, icon: true, color: true } },
+          wallet: { select: { id: true, name: true, icon: true, color: true, logo: true } },
         },
         orderBy: [{ date: "desc" }, { createdAt: "desc" }],
         take: 8,

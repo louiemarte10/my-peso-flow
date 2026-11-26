@@ -7,7 +7,7 @@ import { isYmd, manilaDayStartUTC } from "@/lib/date";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-const WALLET_PICK = { select: { id: true, name: true, icon: true, color: true } };
+const WALLET_PICK = { select: { id: true, name: true, icon: true, color: true, logo: true } };
 
 /** PATCH /api/transfers/:id */
 export async function PATCH(req: NextRequest, { params }: Ctx) {

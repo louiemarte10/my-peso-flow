@@ -17,6 +17,8 @@ import {
   WALLET_TYPES,
 } from "@/lib/defaults";
 import WalletCard from "@/components/WalletCard";
+import WalletAvatar from "@/components/WalletAvatar";
+import LogoPicker from "@/components/LogoPicker";
 import ConfirmModal, { type ConfirmState } from "@/components/ConfirmModal";
 import { Skeleton, SkeletonRows } from "@/components/Skeleton";
 
@@ -25,6 +27,8 @@ type WalletForm = {
   type: WalletType;
   color: string;
   icon: string;
+  /** Uploaded logo as a data URL; wins over the emoji when set. */
+  logo: string | null;
   accountRef: string;
   openingBalance: string;
   lowBalance: string;
@@ -35,6 +39,7 @@ const emptyWallet = (): WalletForm => ({
   type: "EWALLET",
   color: WALLET_COLORS[0],
   icon: WALLET_ICONS[1],
+  logo: null,
   accountRef: "",
   openingBalance: "",
   lowBalance: "",
@@ -139,6 +144,7 @@ export default function WalletsPage() {
       type: w.type,
       color: w.color ?? WALLET_COLORS[0],
       icon: w.icon ?? WALLET_ICONS[1],
+      logo: w.logo ?? null,
       accountRef: w.accountRef ?? "",
       openingBalance: (w.openingBalanceCents / 100).toFixed(2),
       lowBalance: w.lowBalanceCents ? (w.lowBalanceCents / 100).toFixed(2) : "",
@@ -159,6 +165,7 @@ export default function WalletsPage() {
       type: walletForm.type,
       color: walletForm.color,
       icon: walletForm.icon,
+      logo: walletForm.logo,
       accountRef: walletForm.accountRef.trim() || null,
       openingBalance: parseFloat(walletForm.openingBalance) || 0,
       lowBalance: parseFloat(walletForm.lowBalance) || 0,
@@ -437,8 +444,23 @@ export default function WalletsPage() {
               />
             </Field>
 
-            <Field label="Icon" className="col-span-2">
-              <div className="flex flex-wrap gap-1">
+            <Field label="Logo" className="col-span-2 sm:col-span-3 lg:col-span-4">
+              <LogoPicker
+                value={walletForm.logo}
+                fallbackEmoji={walletForm.icon}
+                onChange={(logo) => setWalletForm({ ...walletForm, logo })}
+              />
+            </Field>
+
+            <Field
+              label={
+                walletForm.logo ? "Emoji (unused while a logo is set)" : "Icon"
+              }
+              className="col-span-2"
+            >
+              <div
+                className={`flex flex-wrap gap-1 ${walletForm.logo ? "opacity-50" : ""}`}
+              >
                 {WALLET_ICONS.map((ic) => (
                   <button
                     key={ic}
@@ -737,9 +759,13 @@ export default function WalletsPage() {
                       {longDayLabel(ymdFromISO(t.date))}
                     </td>
                     <td className="whitespace-nowrap px-3 py-2.5 text-slate-700">
-                      {t.fromWallet.icon ?? "👛"} {t.fromWallet.name}
-                      <span className="mx-1.5 text-slate-400">→</span>
-                      {t.toWallet.icon ?? "👛"} {t.toWallet.name}
+                      <span className="inline-flex items-center gap-1.5">
+                        <WalletAvatar wallet={t.fromWallet} size="xs" />
+                        {t.fromWallet.name}
+                        <span className="mx-0.5 text-slate-400">→</span>
+                        <WalletAvatar wallet={t.toWallet} size="xs" />
+                        {t.toWallet.name}
+                      </span>
                     </td>
                     <td className="max-w-[14rem] truncate px-3 py-2.5 text-slate-500">
                       {t.note ?? "—"}
@@ -781,7 +807,7 @@ export default function WalletsPage() {
           <ul className="mt-3 divide-y divide-slate-100">
             {archived.map((w) => (
               <li key={w.id} className="flex items-center gap-3 py-2.5">
-                <span className="text-base opacity-50">{w.icon ?? "👛"}</span>
+                <WalletAvatar wallet={w} size="sm" className="opacity-60" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm text-slate-500">{w.name}</p>
                   <p className="text-xs text-slate-400">

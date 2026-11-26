@@ -19,6 +19,7 @@ import {
 } from "@/lib/date";
 import ConfirmModal, { type ConfirmState } from "@/components/ConfirmModal";
 import { SkeletonRows } from "@/components/Skeleton";
+import WalletAvatar from "@/components/WalletAvatar";
 
 type FormState = {
   date: string;
@@ -351,9 +352,11 @@ export default function EntryManager({
               className={inputCls}
             >
               <option value="">— None —</option>
+              {/* A native <option> cannot render an image, so the list stays
+                  textual; the chosen wallet shows its logo in the table below. */}
               {wallets.map((w) => (
                 <option key={w.id} value={w.id}>
-                  {w.icon ? `${w.icon} ` : ""}
+                  {w.logo ? "" : w.icon ? `${w.icon} ` : ""}
                   {w.name}
                 </option>
               ))}
@@ -556,9 +559,14 @@ export default function EntryManager({
                         {e.note ?? "—"}
                       </td>
                       <td className="whitespace-nowrap px-3 py-2.5 text-slate-500">
-                        {e.wallet
-                          ? `${e.wallet.icon ?? "👛"} ${e.wallet.name}`
-                          : "—"}
+                        {e.wallet ? (
+                          <span className="inline-flex items-center gap-1.5">
+                            <WalletAvatar wallet={e.wallet} size="xs" />
+                            {e.wallet.name}
+                          </span>
+                        ) : (
+                          "—"
+                        )}
                       </td>
                       <td className={`px-3 py-2.5 text-right font-semibold tabular-nums ${accent}`}>
                         {formatPeso(e.amountCents)}

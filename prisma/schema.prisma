@@ -79,7 +79,11 @@ model Wallet {
   name                String
   type                WalletType @default(EWALLET)
   color               String? // hex, used on the wallet cards
-  icon                String? // one emoji shown on the card
+  icon                String? // one emoji, used when there is no logo
+  /// An uploaded logo (GCash, a bank, …) as a small square PNG data URL.
+  /// Stored inline rather than on disk because the host filesystem is
+  /// read-only; the browser shrinks it to 128px first, so it stays a few KB.
+  logo                String?
   accountRef          String? // optional nickname / last 4 digits
   openingBalanceCents Int        @default(0)
   /// Warn when the balance drops to or below this. 0 disables the warning.

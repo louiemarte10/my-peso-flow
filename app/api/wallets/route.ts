@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { badRequest, unauthorized } from "@/lib/api";
 import { pesosToCents } from "@/lib/money";
 import { walletSummaries } from "@/lib/wallets";
+import { checkLogo } from "@/lib/logo";
 import type { WalletType } from "@/generated/prisma/client";
 
 const TYPES = ["BANK", "EWALLET", "CASH", "SAVINGS", "CREDIT"] as const;
@@ -60,6 +61,9 @@ export async function POST(req: NextRequest) {
   });
   if (duplicate) return badRequest(`"${name}" already exists`);
 
+  const logo = checkLogo(body.logo);
+  if (!logo.ok) return badRequest(logo.error);
+
   const count = await prisma.wallet.count({ where: { userId: user.sub } });
 
   const wallet = await prisma.wallet.create({
@@ -69,6 +73,7 @@ export async function POST(req: NextRequest) {
       type,
       color: body.color ? String(body.color).trim() : null,
       icon: body.icon ? String(body.icon).trim() : null,
+      logo: logo.value,
       accountRef: body.accountRef ? String(body.accountRef).trim() : null,
       openingBalanceCents: pesosToCents(Number(body.openingBalance) || 0),
       lowBalanceCents: pesosToCents(Number(body.lowBalance) || 0),

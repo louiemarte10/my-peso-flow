@@ -62,6 +62,7 @@ export type WalletRef = {
   name: string;
   icon: string | null;
   color: string | null;
+  logo?: string | null;
 };
 
 /** A wallet plus everything derived from its movements. */
@@ -71,6 +72,8 @@ export type Wallet = {
   type: WalletType;
   color: string | null;
   icon: string | null;
+  /** Uploaded logo as a data URL; takes precedence over `icon`. */
+  logo: string | null;
   accountRef: string | null;
   openingBalanceCents: number;
   lowBalanceCents: number;

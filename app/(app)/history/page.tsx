@@ -13,6 +13,7 @@ import {
   ymdFromISO,
 } from "@/lib/date";
 import { SkeletonRows } from "@/components/Skeleton";
+import WalletAvatar from "@/components/WalletAvatar";
 
 type Filter = "ALL" | "EARNING" | "EXPENSE";
 
@@ -263,9 +264,14 @@ export default function HistoryPage() {
                                   {e.note ?? "—"}
                                 </td>
                                 <td className="whitespace-nowrap px-3 py-2.5 text-slate-500">
-                                  {e.wallet
-                                    ? `${e.wallet.icon ?? "👛"} ${e.wallet.name}`
-                                    : "—"}
+                                  {e.wallet ? (
+                                    <span className="inline-flex items-center gap-1.5">
+                                      <WalletAvatar wallet={e.wallet} size="xs" />
+                                      {e.wallet.name}
+                                    </span>
+                                  ) : (
+                                    "—"
+                                  )}
                                 </td>
                                 <td
                                   className={`px-3 py-2.5 text-right font-semibold tabular-nums ${

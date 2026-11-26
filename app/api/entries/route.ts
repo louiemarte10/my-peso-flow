@@ -9,7 +9,7 @@ import type { EntryKind } from "@/generated/prisma/client";
 
 const ENTRY_INCLUDE = {
   category: { select: { id: true, name: true, color: true } },
-  wallet: { select: { id: true, name: true, icon: true, color: true } },
+  wallet: { select: { id: true, name: true, icon: true, color: true, logo: true } },
 };
 
 function parseKind(raw: string | null): EntryKind | null {
