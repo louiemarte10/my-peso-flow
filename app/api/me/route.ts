@@ -8,6 +8,9 @@ import {
 } from "@/lib/auth";
 import { badRequest, notFound, unauthorized } from "@/lib/api";
 
+/** Deliberately permissive — real validation is "can you receive mail there". */
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 /** GET /api/me — profile plus a couple of counts for the settings page. */
 export async function GET() {
   const session = await getCurrentUser();
@@ -23,7 +26,7 @@ export async function GET() {
       googleId: true,
       passwordHash: true,
       createdAt: true,
-      _count: { select: { entries: true, categories: true } },
+      _count: { select: { entries: true, categories: true, wallets: true } },
     },
   });
   if (!user) return notFound("Account not found");
@@ -38,7 +41,15 @@ export async function GET() {
   });
 }
 
-/** PATCH /api/me — change your display name and/or password. */
+/**
+ * PATCH /api/me — change your display name, sign-in email and/or password.
+ *
+ * Email and password changes are the two that matter if someone else gets at
+ * your session, so both require the current password when the account has one.
+ * A Google-only account has no password to confirm: it is setting one for the
+ * first time, and its Google link survives an email change because the link is
+ * by Google account id, not by address.
+ */
 export async function PATCH(req: NextRequest) {
   const session = await getCurrentUser();
   if (!session) return unauthorized();
@@ -53,7 +64,20 @@ export async function PATCH(req: NextRequest) {
   const user = await prisma.user.findUnique({ where: { id: session.sub } });
   if (!user) return notFound("Account not found");
 
-  const data: { name?: string; passwordHash?: string } = {};
+  const wantsEmail =
+    body.email !== undefined &&
+    String(body.email).trim().toLowerCase() !== user.email;
+  const wantsPassword = body.newPassword !== undefined;
+
+  // One confirmation covers whichever sensitive changes are in this request.
+  if ((wantsEmail || wantsPassword) && user.passwordHash) {
+    const current = String(body.currentPassword ?? "");
+    if (!current || !(await verifyPassword(current, user.passwordHash))) {
+      return badRequest("Your current password is wrong");
+    }
+  }
+
+  const data: { name?: string; email?: string; passwordHash?: string } = {};
 
   if (body.name !== undefined) {
     const name = String(body.name).trim();
@@ -61,18 +85,23 @@ export async function PATCH(req: NextRequest) {
     data.name = name;
   }
 
-  if (body.newPassword !== undefined) {
+  if (wantsEmail) {
+    const email = String(body.email).trim().toLowerCase();
+    if (!EMAIL_RE.test(email)) {
+      return badRequest("Enter a valid email address");
+    }
+    const taken = await prisma.user.findFirst({
+      where: { email, id: { not: user.id } },
+      select: { id: true },
+    });
+    if (taken) return badRequest("That email is already in use");
+    data.email = email;
+  }
+
+  if (wantsPassword) {
     const newPassword = String(body.newPassword);
     if (newPassword.length < 8) {
       return badRequest("Use a password of at least 8 characters");
-    }
-    // Accounts that already have a password must confirm the current one.
-    // A Google-only account is setting a password for the first time.
-    if (user.passwordHash) {
-      const current = String(body.currentPassword ?? "");
-      if (!current || !(await verifyPassword(current, user.passwordHash))) {
-        return badRequest("Your current password is wrong");
-      }
     }
     data.passwordHash = await hashPassword(newPassword);
   }
@@ -87,7 +116,8 @@ export async function PATCH(req: NextRequest) {
     select: { id: true, name: true, email: true, imageUrl: true },
   });
 
-  // Keep the cookie's display name in sync with the sidebar.
+  // Re-issue the cookie so the sidebar and future requests carry the new
+  // name/email straight away.
   await setSessionCookie({
     sub: updated.id,
     name: updated.name,

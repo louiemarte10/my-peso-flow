@@ -14,7 +14,7 @@ type Me = {
   createdAt: string;
   hasPassword: boolean;
   googleLinked: boolean;
-  _count: { entries: number; categories: number };
+  _count: { entries: number; categories: number; wallets: number };
 };
 
 export default function SettingsPage() {
@@ -22,11 +22,20 @@ export default function SettingsPage() {
   const [me, setMe] = useState<Me | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Display name
   const [name, setName] = useState("");
   const [nameMsg, setNameMsg] = useState("");
   const [nameErr, setNameErr] = useState("");
   const [savingName, setSavingName] = useState(false);
 
+  // Sign-in email
+  const [email, setEmail] = useState("");
+  const [emailPassword, setEmailPassword] = useState("");
+  const [emailMsg, setEmailMsg] = useState("");
+  const [emailErr, setEmailErr] = useState("");
+  const [savingEmail, setSavingEmail] = useState(false);
+
+  // Password
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -39,6 +48,7 @@ export default function SettingsPage() {
       const { user } = await api.get<{ user: Me }>("/api/me");
       setMe(user);
       setName(user.name);
+      setEmail(user.email);
     } finally {
       setLoading(false);
     }
@@ -64,6 +74,26 @@ export default function SettingsPage() {
     }
   }
 
+  async function saveEmail() {
+    setEmailErr("");
+    setEmailMsg("");
+    setSavingEmail(true);
+    try {
+      await api.patch("/api/me", {
+        email: email.trim().toLowerCase(),
+        currentPassword: emailPassword || undefined,
+      });
+      setEmailMsg("Sign-in email updated. Use it the next time you sign in.");
+      setEmailPassword("");
+      router.refresh();
+      await load();
+    } catch (err) {
+      setEmailErr(err instanceof Error ? err.message : "Could not save");
+    } finally {
+      setSavingEmail(false);
+    }
+  }
+
   async function savePassword() {
     setPwErr("");
     setPwMsg("");
@@ -78,7 +108,9 @@ export default function SettingsPage() {
         newPassword,
       });
       setPwMsg(
-        me?.hasPassword ? "Password changed." : "Password set — you can now sign in with your email too.",
+        me?.hasPassword
+          ? "Password changed."
+          : "Password set — you can now sign in with your email too.",
       );
       setCurrentPassword("");
       setNewPassword("");
@@ -101,52 +133,35 @@ export default function SettingsPage() {
     );
   }
 
+  const emailChanged = email.trim().toLowerCase() !== me.email;
+
   return (
     <div className="max-w-2xl space-y-5">
       <div>
         <h1 className="text-xl font-bold text-slate-800">Settings</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Your account and how myPesoFlow looks.
+          Your sign-in details and how myPesoFlow looks.
         </p>
       </div>
 
-      {/* Account */}
+      {/* ── Account at a glance ── */}
       <section className="rounded-2xl border border-slate-200 bg-surface p-5 shadow-sm">
         <h2 className="mb-4 font-bold text-slate-800">Account</h2>
 
-        <dl className="mb-4 grid grid-cols-2 gap-3 text-sm">
-          <div>
-            <dt className="text-xs text-slate-400">Email</dt>
-            <dd className="truncate text-slate-700">{me.email}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-slate-400">Sign-in methods</dt>
-            <dd className="text-slate-700">
-              {[me.hasPassword && "Password", me.googleLinked && "Google"]
-                .filter(Boolean)
-                .join(" + ") || "—"}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-xs text-slate-400">Entries encoded</dt>
-            <dd className="text-slate-700">{me._count.entries}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-slate-400">Categories</dt>
-            <dd className="text-slate-700">{me._count.categories}</dd>
-          </div>
+        <dl className="mb-5 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+          <Fact label="Sign-in methods">
+            {[me.hasPassword && "Password", me.googleLinked && "Google"]
+              .filter(Boolean)
+              .join(" + ") || "—"}
+          </Fact>
+          <Fact label="Entries">{me._count.entries}</Fact>
+          <Fact label="Wallets">{me._count.wallets}</Fact>
+          <Fact label="Categories">{me._count.categories}</Fact>
         </dl>
 
-        {nameErr && (
-          <div className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
-            {nameErr}
-          </div>
-        )}
-        {nameMsg && (
-          <div className="mb-3 rounded-lg bg-brand-light px-3 py-2 text-sm text-brand-dark">
-            {nameMsg}
-          </div>
-        )}
+        {/* Display name */}
+        {nameErr && <Alert tone="error">{nameErr}</Alert>}
+        {nameMsg && <Alert tone="ok">{nameMsg}</Alert>}
 
         <label className="mb-1 block text-xs font-medium text-slate-500">
           Display name
@@ -155,19 +170,75 @@ export default function SettingsPage() {
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-surface px-3 py-2 text-sm text-slate-800 outline-none focus:border-brand focus:ring-2 focus:ring-brand/30"
+            className={`min-w-0 flex-1 ${inputCls}`}
           />
           <button
             onClick={saveName}
             disabled={savingName || !name.trim() || name === me.name}
-            className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-dark disabled:opacity-40"
+            className={btnCls}
           >
             {savingName ? "Saving…" : "Save"}
           </button>
         </div>
       </section>
 
-      {/* Password */}
+      {/* ── Sign-in email ── */}
+      <section className="rounded-2xl border border-slate-200 bg-surface p-5 shadow-sm">
+        <h2 className="mb-1 font-bold text-slate-800">Sign-in email</h2>
+        <p className="mb-4 text-sm text-slate-500">
+          This is the address you sign in with. Changing it takes effect
+          immediately — the old one stops working.
+          {me.googleLinked && (
+            <>
+              {" "}
+              Your Google sign-in keeps working either way, because it is linked
+              to your Google account rather than to this address.
+            </>
+          )}
+        </p>
+
+        {emailErr && <Alert tone="error">{emailErr}</Alert>}
+        {emailMsg && <Alert tone="ok">{emailMsg}</Alert>}
+
+        <div className="space-y-3">
+          <Labeled label="Email address">
+            <input
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className={inputCls}
+            />
+          </Labeled>
+
+          {emailChanged && me.hasPassword && (
+            <Labeled label="Confirm with your current password">
+              <input
+                type="password"
+                autoComplete="current-password"
+                value={emailPassword}
+                onChange={(e) => setEmailPassword(e.target.value)}
+                className={inputCls}
+                placeholder="••••••••"
+              />
+            </Labeled>
+          )}
+
+          <button
+            onClick={saveEmail}
+            disabled={
+              savingEmail ||
+              !emailChanged ||
+              (me.hasPassword && !emailPassword)
+            }
+            className={btnCls}
+          >
+            {savingEmail ? "Saving…" : "Change email"}
+          </button>
+        </div>
+      </section>
+
+      {/* ── Password ── */}
       <section className="rounded-2xl border border-slate-200 bg-surface p-5 shadow-sm">
         <h2 className="mb-1 font-bold text-slate-800">
           {me.hasPassword ? "Change password" : "Set a password"}
@@ -178,16 +249,8 @@ export default function SettingsPage() {
             : "Your account signs in with Google only. Set a password to also sign in with your email."}
         </p>
 
-        {pwErr && (
-          <div className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
-            {pwErr}
-          </div>
-        )}
-        {pwMsg && (
-          <div className="mb-3 rounded-lg bg-brand-light px-3 py-2 text-sm text-brand-dark">
-            {pwMsg}
-          </div>
-        )}
+        {pwErr && <Alert tone="error">{pwErr}</Alert>}
+        {pwMsg && <Alert tone="ok">{pwMsg}</Alert>}
 
         <div className="space-y-3">
           {me.hasPassword && (
@@ -222,14 +285,18 @@ export default function SettingsPage() {
           <button
             onClick={savePassword}
             disabled={savingPw || newPassword.length < 8}
-            className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-dark disabled:opacity-40"
+            className={btnCls}
           >
-            {savingPw ? "Saving…" : me.hasPassword ? "Change password" : "Set password"}
+            {savingPw
+              ? "Saving…"
+              : me.hasPassword
+                ? "Change password"
+                : "Set password"}
           </button>
         </div>
       </section>
 
-      {/* Appearance */}
+      {/* ── Appearance ── */}
       <section className="rounded-2xl border border-slate-200 bg-surface p-5 shadow-sm">
         <h2 className="mb-1 font-bold text-slate-800">Appearance</h2>
         <p className="mb-4 text-sm text-slate-500">
@@ -247,6 +314,9 @@ export default function SettingsPage() {
 const inputCls =
   "w-full rounded-lg border border-slate-300 bg-surface px-3 py-2 text-sm text-slate-800 outline-none focus:border-brand focus:ring-2 focus:ring-brand/30";
 
+const btnCls =
+  "rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition hover:bg-brand-dark disabled:opacity-40";
+
 function Labeled({
   label,
   children,
@@ -259,6 +329,41 @@ function Labeled({
       <label className="mb-1 block text-xs font-medium text-slate-500">
         {label}
       </label>
+      {children}
+    </div>
+  );
+}
+
+function Fact({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <dt className="text-xs text-slate-400">{label}</dt>
+      <dd className="truncate text-slate-700">{children}</dd>
+    </div>
+  );
+}
+
+function Alert({
+  tone,
+  children,
+}: {
+  tone: "ok" | "error";
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className={`mb-3 rounded-lg px-3 py-2 text-sm ${
+        tone === "error"
+          ? "bg-red-50 text-red-600"
+          : "bg-brand-light text-brand-dark"
+      }`}
+    >
       {children}
     </div>
   );
