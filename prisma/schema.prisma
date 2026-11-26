@@ -1,0 +1,76 @@
+// myPesoFlow — personal earnings & expense tracker.
+// Prisma 7 schema. Money is stored as integer centavos (₱1 = 100) so we never
+// hit floating-point rounding; the API layer converts to/from pesos.
+// Dates are stored as the UTC instant of 00:00 Manila for that calendar day.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  USER
+}
+
+enum EntryKind {
+  EARNING
+  EXPENSE
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String? // null for Google-only accounts
+  googleId     String?  @unique
+  imageUrl     String?
+  role         Role     @default(USER)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  categories Category[]
+  entries    Entry[]
+}
+
+model Category {
+  id        String    @id @default(cuid())
+  name      String
+  kind      EntryKind
+  color     String? // hex used by the charts, e.g. "#0078BF"
+  archived  Boolean   @default(false)
+  createdAt DateTime  @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  entries Entry[]
+
+  @@unique([userId, kind, name])
+  @@index([userId, kind])
+}
+
+model Entry {
+  id          String    @id @default(cuid())
+  date        DateTime // 00:00 Manila for the calendar day, stored as UTC
+  kind        EntryKind
+  amountCents Int
+  note        String?
+  method      String? // Cash / GCash / Bank / etc. (optional)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, date])
+  @@index([userId, kind, date])
+}

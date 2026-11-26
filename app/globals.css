@@ -1,0 +1,90 @@
+@import "tailwindcss";
+
+/* myPesoFlow — blue theme.
+   Light mode: clean white/ice surfaces with the #0078BF brand accent.
+   Dark mode is applied by overriding the neutral + accent color tokens under
+   :root[data-theme="dark"], so every utility (bg-surface, text-slate-*, borders,
+   hover states) re-themes automatically with the #55A5D4 accent. */
+@theme {
+  --color-brand: #0078bf; /* light-mode accent */
+  --color-brand-dark: #005c93; /* hover / headings */
+  --color-brand-light: #e3f1fa; /* tinted panels */
+  --color-ice: #f1f5fa; /* app background */
+  --color-surface: #ffffff; /* cards / panels */
+
+  --color-income: #0f9d58; /* earnings green */
+  --color-outflow: #e5484d; /* expense red */
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+:root {
+  --background: #f1f5fa;
+  --foreground: #0f1c28;
+  color-scheme: light;
+}
+
+/* ── Dark theme: deep navy-black surfaces with the lighter #55A5D4 accent. ── */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #0a0f15;
+  --foreground: #e8edf2;
+
+  --color-surface: #141b24; /* panels / cards */
+  --color-ice: #0d131a; /* app background + row hover base */
+
+  --color-brand: #55a5d4; /* dark-mode accent */
+  --color-brand-dark: #7dbee3; /* brighter on hover */
+  --color-brand-light: #16293a; /* dark blue-tinted panel */
+
+  --color-income: #3ecf8e;
+  --color-outflow: #ff6369;
+
+  --color-slate-50: #19212b;
+  --color-slate-100: #1f2832; /* dividers, subtle fills, hover */
+  --color-slate-200: #2a343f; /* borders */
+  --color-slate-300: #3a4654; /* input borders */
+  --color-slate-400: #8b97a5; /* muted text */
+  --color-slate-500: #a3aeba; /* secondary text */
+  --color-slate-600: #c3ccd5;
+  --color-slate-700: #dde4ea;
+  --color-slate-800: #f1f5f9; /* headings */
+  --color-slate-900: #ffffff;
+
+  /* Only dark-tint the light tints; keep 500/600/700 for buttons and text. */
+  --color-red-50: #2a1416;
+  --color-red-100: #3a1b1e;
+  --color-red-200: #4a2227;
+  --color-emerald-50: #0e2420;
+  --color-emerald-100: #143029;
+  --color-blue-50: #16293a;
+  --color-blue-100: #1c3447;
+}
+
+/* Accent fills carry near-black text in dark mode (the lighter blue needs it). */
+:root[data-theme="dark"] .bg-brand {
+  color: #08131c;
+}
+:root[data-theme="dark"] .bg-brand [class*="text-white"] {
+  color: #08131c;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+
+* {
+  scrollbar-width: thin;
+}
+
+/* Native date pickers are unreadable on dark surfaces without this. */
+:root[data-theme="dark"] input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) opacity(0.7);
+}

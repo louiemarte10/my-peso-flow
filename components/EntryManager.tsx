@@ -1,0 +1,539 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  api,
+  type Category,
+  type Entry,
+  type EntryKind,
+  type Totals,
+} from "@/lib/client";
+import { formatPeso } from "@/lib/money";
+import {
+  addDaysKey,
+  longDayLabel,
+  monthStartKey,
+  todayKey,
+} from "@/lib/date";
+import { METHODS } from "@/lib/defaults";
+import ConfirmModal, { type ConfirmState } from "@/components/ConfirmModal";
+import { SkeletonRows } from "@/components/Skeleton";
+
+type FormState = {
+  date: string;
+  categoryId: string;
+  amount: string;
+  method: string;
+  note: string;
+};
+
+type Preset = "today" | "yesterday" | "7d" | "month" | "all" | "custom";
+
+/**
+ * The encode page for one kind of entry. Earnings and Expenses are the same
+ * screen with different wording and colours, so they share this component.
+ */
+export default function EntryManager({
+  kind,
+  title,
+  blurb,
+  amountLabel,
+  categoryLabel,
+}: {
+  kind: EntryKind;
+  title: string;
+  blurb: string;
+  amountLabel: string;
+  categoryLabel: string;
+}) {
+  const today = todayKey();
+  const isEarning = kind === "EARNING";
+  const accent = isEarning ? "text-income" : "text-outflow";
+
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [entries, setEntries] = useState<Entry[]>([]);
+  const [totals, setTotals] = useState<Totals>({
+    earningsCents: 0,
+    expenseCents: 0,
+    balanceCents: 0,
+  });
+
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<ConfirmState | null>(null);
+  const [confirmLoading, setConfirmLoading] = useState(false);
+
+  const [preset, setPreset] = useState<Preset>("month");
+  const [from, setFrom] = useState(monthStartKey(today));
+  const [to, setTo] = useState(today);
+
+  const [form, setForm] = useState<FormState>({
+    date: today,
+    categoryId: "",
+    amount: "",
+    method: "",
+    note: "",
+  });
+
+  const loadCategories = useCallback(async () => {
+    const { categories } = await api.get<{ categories: Category[] }>(
+      `/api/categories?kind=${kind}`,
+    );
+    setCategories(categories);
+    setForm((f) => ({
+      ...f,
+      categoryId: f.categoryId || categories[0]?.id || "",
+    }));
+  }, [kind]);
+
+  const loadEntries = useCallback(async () => {
+    const qs =
+      preset === "all"
+        ? `?kind=${kind}`
+        : `?kind=${kind}&from=${from}&to=${to}`;
+    const res = await api.get<{ entries: Entry[]; totals: Totals }>(
+      `/api/entries${qs}`,
+    );
+    setEntries(res.entries);
+    setTotals(res.totals);
+  }, [kind, preset, from, to]);
+
+  useEffect(() => {
+    // Mount-and-refetch whenever the kind or the date filter changes.
+    (async () => {
+      setLoading(true);
+      try {
+        await Promise.all([loadCategories(), loadEntries()]);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not load");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [loadCategories, loadEntries]);
+
+  const rangeTotalCents = isEarning ? totals.earningsCents : totals.expenseCents;
+
+  const dayCount = useMemo(() => {
+    return new Set(entries.map((e) => e.date.slice(0, 10))).size;
+  }, [entries]);
+
+  async function save() {
+    setError("");
+    const amount = parseFloat(form.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setError("Enter an amount greater than 0.");
+      return;
+    }
+    if (!form.date) {
+      setError("Choose a date.");
+      return;
+    }
+
+    setSaving(true);
+    const payload = {
+      kind,
+      date: form.date,
+      amount,
+      categoryId: form.categoryId || null,
+      method: form.method || null,
+      note: form.note || null,
+    };
+
+    try {
+      if (editingId) {
+        await api.patch(`/api/entries/${editingId}`, payload);
+      } else {
+        await api.post("/api/entries", payload);
+      }
+      resetForm();
+      await loadEntries();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function resetForm() {
+    setEditingId(null);
+    setError("");
+    setForm((f) => ({
+      ...f,
+      date: today,
+      amount: "",
+      note: "",
+    }));
+  }
+
+  function openEdit(e: Entry) {
+    setError("");
+    setEditingId(e.id);
+    setForm({
+      date: e.date.slice(0, 10),
+      categoryId: e.categoryId ?? "",
+      amount: (e.amountCents / 100).toFixed(2),
+      method: e.method ?? "",
+      note: e.note ?? "",
+    });
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function requestDelete(e: Entry) {
+    setConfirm({
+      title: `Delete this ${isEarning ? "earning" : "expense"}`,
+      message: `Remove ${formatPeso(e.amountCents)} on ${longDayLabel(
+        e.date.slice(0, 10),
+      )}? This can't be undone.`,
+      confirmLabel: "Delete",
+      danger: true,
+      onConfirm: async () => {
+        setConfirmLoading(true);
+        try {
+          await api.del(`/api/entries/${e.id}`);
+          setConfirm(null);
+          if (editingId === e.id) resetForm();
+          await loadEntries();
+        } catch (err) {
+          setError(err instanceof Error ? err.message : "Could not delete");
+          setConfirm(null);
+        } finally {
+          setConfirmLoading(false);
+        }
+      },
+    });
+  }
+
+  function applyPreset(p: Preset) {
+    setPreset(p);
+    if (p === "today") {
+      setFrom(today);
+      setTo(today);
+    } else if (p === "yesterday") {
+      setFrom(addDaysKey(today, -1));
+      setTo(addDaysKey(today, -1));
+    } else if (p === "7d") {
+      setFrom(addDaysKey(today, -6));
+      setTo(today);
+    } else if (p === "month") {
+      setFrom(monthStartKey(today));
+      setTo(today);
+    }
+  }
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <h1 className="text-xl font-bold text-slate-800">{title}</h1>
+        <p className="mt-1 max-w-[75ch] text-sm text-slate-500">{blurb}</p>
+      </div>
+
+      {/* ── Encode form ── */}
+      <div
+        className={`rounded-2xl border bg-surface p-5 shadow-sm ${
+          editingId ? "border-brand" : "border-slate-200"
+        }`}
+      >
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="font-bold text-slate-800">
+            {editingId ? "Edit entry" : "Encode an entry"}
+          </h2>
+          {editingId && (
+            <button
+              onClick={resetForm}
+              className="rounded-lg border border-slate-300 px-3 py-1 text-xs font-semibold text-slate-600 transition hover:border-brand hover:text-brand-dark"
+            >
+              Cancel edit
+            </button>
+          )}
+        </div>
+
+        {error && (
+          <div className="mb-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">
+            {error}
+          </div>
+        )}
+
+        {categories.length === 0 && !loading && (
+          <div className="mb-3 rounded-lg bg-brand-light px-3 py-2 text-sm text-brand-dark">
+            You have no {categoryLabel.toLowerCase()} categories yet. Add one on
+            the Categories page — or save without one and label it later.
+          </div>
+        )}
+
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          <Field label="Date">
+            <input
+              type="date"
+              max={today}
+              value={form.date}
+              onChange={(e) => setForm({ ...form, date: e.target.value })}
+              className={inputCls}
+            />
+          </Field>
+
+          <Field label={categoryLabel}>
+            <select
+              value={form.categoryId}
+              onChange={(e) => setForm({ ...form, categoryId: e.target.value })}
+              className={inputCls}
+            >
+              <option value="">— None —</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <Field label={amountLabel}>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              inputMode="decimal"
+              value={form.amount}
+              onChange={(e) => setForm({ ...form, amount: e.target.value })}
+              placeholder="0.00"
+              className={inputCls}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") save();
+              }}
+            />
+          </Field>
+
+          <Field label="Paid via (optional)">
+            <select
+              value={form.method}
+              onChange={(e) => setForm({ ...form, method: e.target.value })}
+              className={inputCls}
+            >
+              <option value="">— None —</option>
+              {METHODS.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          </Field>
+
+          <Field label="Note (optional)" className="col-span-2">
+            <input
+              value={form.note}
+              onChange={(e) => setForm({ ...form, note: e.target.value })}
+              placeholder={
+                isEarning ? "15th cutoff pay…" : "Groceries at SM…"
+              }
+              className={inputCls}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") save();
+              }}
+            />
+          </Field>
+
+          <div className="col-span-2 flex items-end sm:col-span-1">
+            <button
+              onClick={save}
+              disabled={saving}
+              className="w-full rounded-lg bg-brand py-2 text-sm font-semibold text-white transition hover:bg-brand-dark disabled:opacity-50"
+            >
+              {saving ? "Saving…" : editingId ? "Update" : "Save entry"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── History ── */}
+      <div className="rounded-2xl border border-slate-200 bg-surface p-5 shadow-sm">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="font-bold text-slate-800">History</h2>
+            <p className="text-xs text-slate-400">
+              {entries.length} entr{entries.length === 1 ? "y" : "ies"}
+              {dayCount > 0 && ` across ${dayCount} day${dayCount === 1 ? "" : "s"}`}
+              {" · "}
+              <span className={`font-semibold ${accent}`}>
+                {formatPeso(rangeTotalCents)}
+              </span>
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Quick label="Today" on={preset === "today"} onClick={() => applyPreset("today")} />
+            <Quick label="Yesterday" on={preset === "yesterday"} onClick={() => applyPreset("yesterday")} />
+            <Quick label="7 days" on={preset === "7d"} onClick={() => applyPreset("7d")} />
+            <Quick label="This month" on={preset === "month"} onClick={() => applyPreset("month")} />
+            <Quick label="All" on={preset === "all"} onClick={() => applyPreset("all")} />
+            <div className="flex items-center gap-1">
+              <input
+                type="date"
+                value={from}
+                max={to}
+                onChange={(e) => {
+                  setPreset("custom");
+                  setFrom(e.target.value);
+                }}
+                className="rounded-lg border border-slate-300 bg-surface px-2 py-1 text-xs text-slate-700 outline-none focus:border-brand"
+              />
+              <span className="text-xs text-slate-400">–</span>
+              <input
+                type="date"
+                value={to}
+                min={from}
+                onChange={(e) => {
+                  setPreset("custom");
+                  setTo(e.target.value);
+                }}
+                className="rounded-lg border border-slate-300 bg-surface px-2 py-1 text-xs text-slate-700 outline-none focus:border-brand"
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="-mx-5 overflow-x-auto px-5">
+          <table className="w-full min-w-[42rem] text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
+                <th className="px-3 py-2.5 font-semibold">Date</th>
+                <th className="px-3 py-2.5 font-semibold">{categoryLabel}</th>
+                <th className="px-3 py-2.5 font-semibold">Note</th>
+                <th className="px-3 py-2.5 font-semibold">Via</th>
+                <th className="px-3 py-2.5 text-right font-semibold">Amount</th>
+                <th className="px-3 py-2.5 text-right font-semibold">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <SkeletonRows rows={6} cols={6} />
+              ) : entries.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-3 py-10 text-center text-slate-400">
+                    Nothing encoded in this range yet.
+                  </td>
+                </tr>
+              ) : (
+                <>
+                  {entries.map((e) => (
+                    <tr
+                      key={e.id}
+                      className={`border-b border-slate-100 last:border-0 hover:bg-ice ${
+                        editingId === e.id ? "bg-brand-light" : ""
+                      }`}
+                    >
+                      <td className="whitespace-nowrap px-3 py-2.5 text-slate-600">
+                        {longDayLabel(e.date.slice(0, 10))}
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <span className="inline-flex items-center gap-1.5">
+                          <span
+                            className="h-2 w-2 shrink-0 rounded-full"
+                            style={{
+                              background:
+                                e.category?.color ??
+                                (isEarning ? "#0f9d58" : "#e5484d"),
+                            }}
+                          />
+                          <span className="text-slate-700">
+                            {e.category?.name ?? "Uncategorised"}
+                          </span>
+                        </span>
+                      </td>
+                      <td className="max-w-[16rem] truncate px-3 py-2.5 text-slate-500">
+                        {e.note ?? "—"}
+                      </td>
+                      <td className="px-3 py-2.5 text-slate-500">
+                        {e.method ?? "—"}
+                      </td>
+                      <td className={`px-3 py-2.5 text-right font-semibold tabular-nums ${accent}`}>
+                        {formatPeso(e.amountCents)}
+                      </td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-right">
+                        <button
+                          onClick={() => openEdit(e)}
+                          className="rounded-md px-2 py-1 text-xs font-semibold text-brand transition hover:bg-brand-light"
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => requestDelete(e)}
+                          className="rounded-md px-2 py-1 text-xs font-semibold text-red-600 transition hover:bg-red-50"
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  <tr className="bg-ice font-semibold text-slate-700">
+                    <td className="px-3 py-2.5" colSpan={4}>
+                      Total
+                    </td>
+                    <td className={`px-3 py-2.5 text-right tabular-nums ${accent}`}>
+                      {formatPeso(rangeTotalCents)}
+                    </td>
+                    <td className="px-3 py-2.5" />
+                  </tr>
+                </>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <ConfirmModal
+        state={confirm}
+        loading={confirmLoading}
+        onClose={() => setConfirm(null)}
+      />
+    </div>
+  );
+}
+
+/* ── Shared bits ─────────────────────────────────────────────────────────── */
+
+const inputCls =
+  "w-full rounded-lg border border-slate-300 bg-surface px-3 py-2 text-sm text-slate-800 outline-none focus:border-brand focus:ring-2 focus:ring-brand/30";
+
+function Field({
+  label,
+  children,
+  className = "",
+}: {
+  label: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={className}>
+      <label className="mb-1 block text-xs font-medium text-slate-500">
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+function Quick({
+  label,
+  on,
+  onClick,
+}: {
+  label: string;
+  on: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-lg border px-2.5 py-1 text-xs font-semibold transition ${
+        on
+          ? "border-brand bg-brand text-white"
+          : "border-slate-300 bg-surface text-slate-600 hover:border-brand hover:text-brand-dark"
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
