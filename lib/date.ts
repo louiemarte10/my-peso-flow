@@ -105,3 +105,34 @@ export function monthLabel(monthKey: string): string {
     timeZone: "UTC",
   });
 }
+
+/**
+ * The Manila wall-clock time of an instant, e.g. "11:42 PM".
+ *
+ * Shifts into Manila and then reads with UTC getters, so it shows the same
+ * time no matter where the browser thinks it is — the whole app is Manila.
+ */
+export function manilaTimeLabel(iso: string): string {
+  const d = new Date(new Date(iso).getTime() + MANILA_OFFSET_MS);
+  const minutes = d.getUTCMinutes();
+  const hour24 = d.getUTCHours();
+  const hour = hour24 % 12 || 12;
+  return `${hour}:${String(minutes).padStart(2, "0")} ${hour24 >= 12 ? "PM" : "AM"}`;
+}
+
+/** "just now", "2 min ago", "3 hrs ago", "5 days ago", else the date. */
+export function relativeLabel(iso: string): string {
+  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins} min ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours} hr${hours === 1 ? "" : "s"} ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days} day${days === 1 ? "" : "s"} ago`;
+  return longDayLabel(manilaDayKey(new Date(iso)));
+}
+
+/** "Nov 26, 2026, 11:42 PM" — the whole moment, for a tooltip. */
+export function fullMomentLabel(iso: string): string {
+  return `${longDayLabel(manilaDayKey(new Date(iso)))}, ${manilaTimeLabel(iso)}`;
+}

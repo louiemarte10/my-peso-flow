@@ -6,8 +6,11 @@ import { api, type Entry, type Totals } from "@/lib/client";
 import { formatPeso } from "@/lib/money";
 import {
   addDaysKey,
+  fullMomentLabel,
   longDayLabel,
+  manilaTimeLabel,
   monthStartKey,
+  relativeLabel,
   todayKey,
   yearStartKey,
   ymdFromISO,
@@ -82,10 +85,19 @@ export default function HistoryPage() {
   }, [visible]);
 
   function exportCsv() {
-    const head = ["Date", "Type", "Category", "Wallet", "Note", "Amount"];
+    const head = [
+      "Date",
+      "Time encoded",
+      "Type",
+      "Category",
+      "Wallet",
+      "Note",
+      "Amount",
+    ];
     const lines = visible.map((e) =>
       [
         ymdFromISO(e.date),
+        manilaTimeLabel(e.createdAt),
         e.kind === "EARNING" ? "Earning" : "Expense",
         e.category?.name ?? "Uncategorised",
         e.wallet?.name ?? "",
@@ -112,7 +124,8 @@ export default function HistoryPage() {
         <div>
           <h1 className="text-xl font-bold text-slate-800">All Transactions</h1>
           <p className="mt-1 text-sm text-slate-500">
-            Every earning and expense in one ledger. Edit them on the{" "}
+            Every earning and expense in one ledger. The time is when you
+            encoded it — hover to see the full moment. Edit them on the{" "}
             <Link href="/earnings" className="text-brand hover:underline">
               Earnings
             </Link>{" "}
@@ -189,9 +202,10 @@ export default function HistoryPage() {
         </div>
 
         <div className="-mx-5 overflow-x-auto px-5">
-          <table className="w-full min-w-[40rem] text-sm">
+          <table className="w-full min-w-[46rem] text-sm">
             <thead>
               <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-400">
+                <th className="px-3 py-2.5 font-semibold">Time</th>
                 <th className="px-3 py-2.5 font-semibold">Category</th>
                 <th className="px-3 py-2.5 font-semibold">Note</th>
                 <th className="px-3 py-2.5 font-semibold">Wallet</th>
@@ -200,10 +214,10 @@ export default function HistoryPage() {
             </thead>
             <tbody>
               {loading ? (
-                <SkeletonRows rows={8} cols={4} />
+                <SkeletonRows rows={8} cols={5} />
               ) : days.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-3 py-10 text-center text-slate-400">
+                  <td colSpan={5} className="px-3 py-10 text-center text-slate-400">
                     No transactions match this range.
                   </td>
                 </tr>
@@ -217,7 +231,7 @@ export default function HistoryPage() {
                     .reduce((s, r) => s + r.amountCents, 0);
                   return (
                     <tr key={day} className="align-top">
-                      <td colSpan={4} className="px-0 py-0">
+                      <td colSpan={5} className="px-0 py-0">
                         <div className="flex flex-wrap items-baseline justify-between gap-2 border-y border-slate-100 bg-ice px-3 py-2">
                           <span className="text-xs font-bold uppercase tracking-wide text-slate-500">
                             {longDayLabel(day)}
@@ -243,6 +257,14 @@ export default function HistoryPage() {
                                 key={e.id}
                                 className="border-b border-slate-100 last:border-0 hover:bg-ice"
                               >
+                                <td
+                                  className="whitespace-nowrap px-3 py-2.5 tabular-nums text-slate-400"
+                                  title={`Encoded ${fullMomentLabel(
+                                    e.createdAt,
+                                  )} (${relativeLabel(e.createdAt)})`}
+                                >
+                                  {manilaTimeLabel(e.createdAt)}
+                                </td>
                                 <td className="px-3 py-2.5">
                                   <span className="inline-flex items-center gap-1.5">
                                     <span
