@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/client";
+import { SESSION_IDLE_LABEL } from "@/lib/session-public";
 import ThemeToggle from "@/components/ThemeToggle";
 
 const OAUTH_ERRORS: Record<string, string> = {
@@ -23,6 +24,7 @@ export default function LoginForm({
   next,
   errorCode,
   justCreated,
+  timedOut,
   initialEmail,
 }: {
   googleEnabled: boolean;
@@ -30,6 +32,8 @@ export default function LoginForm({
   signupEnabled: boolean;
   /** Arrived here straight after creating an account. */
   justCreated: boolean;
+  /** Arrived here because the session went idle for too long. */
+  timedOut: boolean;
   /** Pre-filled so they only have to type the password they just chose. */
   initialEmail: string;
   /** Where to land after signing in (already validated server-side). */
@@ -83,6 +87,14 @@ export default function LoginForm({
           onSubmit={handleSubmit}
           className="space-y-4 rounded-2xl bg-surface p-6 shadow-xl ring-1 ring-black/5"
         >
+          {timedOut && !formError && (
+            <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              <strong>You were signed out.</strong> A session ends after{" "}
+              {SESSION_IDLE_LABEL} without activity. Sign in to carry on —
+              nothing you encoded was lost.
+            </div>
+          )}
+
           {justCreated && !formError && (
             <div className="rounded-lg bg-emerald-50 px-3 py-2 text-sm text-income">
               <strong>Account created.</strong> Sign in with the password you

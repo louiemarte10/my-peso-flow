@@ -5,7 +5,10 @@ import { cookies } from "next/headers";
 import { prisma } from "./db";
 import {
   SESSION_COOKIE,
-  SESSION_MAX_AGE,
+  SESSION_DEADLINE_COOKIE,
+  deadlineCookieOptions,
+  deadlineValue,
+  sessionCookieOptions,
   signSession,
   verifySession,
   type SessionPayload,
@@ -28,17 +31,17 @@ export async function getCurrentUser(): Promise<SessionPayload | null> {
   return verifySession(store.get(SESSION_COOKIE)?.value);
 }
 
-/** Write the session cookie (call from a route handler after login). */
+/**
+ * Write the session cookie (call from a route handler after login).
+ *
+ * The readable deadline cookie goes out alongside it, so the page knows when
+ * the four idle hours are up. The proxy re-issues both on every request.
+ */
 export async function setSessionCookie(payload: SessionPayload): Promise<void> {
   const token = await signSession(payload);
   const store = await cookies();
-  store.set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: SESSION_MAX_AGE,
-  });
+  store.set(SESSION_COOKIE, token, sessionCookieOptions());
+  store.set(SESSION_DEADLINE_COOKIE, deadlineValue(), deadlineCookieOptions());
 }
 
 export type CurrentUser = {
@@ -116,4 +119,5 @@ export async function getCurrentAdmin(): Promise<CurrentUser | null> {
 export async function clearSessionCookie(): Promise<void> {
   const store = await cookies();
   store.set(SESSION_COOKIE, "", { path: "/", maxAge: 0 });
+  store.set(SESSION_DEADLINE_COOKIE, "", { path: "/", maxAge: 0 });
 }

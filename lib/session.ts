@@ -1,10 +1,17 @@
 // Edge-safe session helpers (jose only — no Node-specific APIs).
 // Used by both the proxy (edge) and server route handlers.
 import { SignJWT, jwtVerify } from "jose";
+import { SESSION_IDLE_MS, SESSION_IDLE_SECONDS } from "./session-public";
 
+/** The signed, httpOnly session itself. The browser never reads this. */
 export const SESSION_COOKIE = "pesoflow_session";
+
+export { SESSION_DEADLINE_COOKIE } from "./session-public";
+
 const ALG = "HS256";
-const MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 days
+
+/** See SESSION_IDLE_SECONDS: four hours from the last thing they did. */
+const IDLE_TIMEOUT_SECONDS = SESSION_IDLE_SECONDS;
 
 export type SessionPayload = {
   sub: string; // user id the session is acting AS
@@ -39,7 +46,7 @@ export async function signSession(payload: SessionPayload): Promise<string> {
     .setProtectedHeader({ alg: ALG })
     .setSubject(payload.sub)
     .setIssuedAt()
-    .setExpirationTime(`${MAX_AGE_SECONDS}s`)
+    .setExpirationTime(`${IDLE_TIMEOUT_SECONDS}s`)
     .sign(getSecret());
 }
 
@@ -48,6 +55,8 @@ export async function verifySession(
 ): Promise<SessionPayload | null> {
   if (!token) return null;
   try {
+    // jwtVerify enforces `exp` itself, so an idle session simply stops
+    // verifying once its four hours are up.
     const { payload } = await jwtVerify(token, getSecret());
     if (!payload.sub) return null;
     return {
@@ -62,4 +71,29 @@ export async function verifySession(
   }
 }
 
-export const SESSION_MAX_AGE = MAX_AGE_SECONDS;
+export const SESSION_MAX_AGE = IDLE_TIMEOUT_SECONDS;
+
+/**
+ * Cookie attributes shared by everything that writes the session, so the
+ * proxy and the route handlers cannot drift apart. `secure` is off in
+ * development because localhost is plain http.
+ */
+export function sessionCookieOptions() {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax" as const,
+    path: "/",
+    maxAge: SESSION_MAX_AGE,
+  };
+}
+
+/** Same attributes, but readable by the page. */
+export function deadlineCookieOptions() {
+  return { ...sessionCookieOptions(), httpOnly: false };
+}
+
+/** The deadline value to store: now + the idle window. */
+export function deadlineValue(): string {
+  return String(Date.now() + SESSION_IDLE_MS);
+}

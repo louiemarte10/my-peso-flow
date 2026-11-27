@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getCurrentUserRecord } from "@/lib/auth";
 import AppShell from "@/components/AppShell";
 import ImpersonationBanner from "@/components/ImpersonationBanner";
+import SessionWatchdog from "@/components/SessionWatchdog";
 
 export default async function AppLayout({
   children,
@@ -15,6 +16,8 @@ export default async function AppLayout({
 
   return (
     <>
+      {/* Ends an idle session on time instead of leaving a dead page open. */}
+      <SessionWatchdog />
       {user.impersonatedBy && (
         <ImpersonationBanner
           actingAs={{ name: user.name, email: user.email }}

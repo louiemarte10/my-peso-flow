@@ -13,6 +13,18 @@ async function request<T>(
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
+    // A 401 from inside the app means the session ran out while this tab sat
+    // open. Send them to sign in rather than showing "Not signed in" on a
+    // page they can no longer use. The sign-in endpoints are exempt: a 401
+    // there is simply a wrong password.
+    if (
+      res.status === 401 &&
+      typeof window !== "undefined" &&
+      !url.startsWith("/api/auth/") &&
+      window.location.pathname !== "/login"
+    ) {
+      window.location.href = "/login?timeout=1";
+    }
     throw new Error((data as { error?: string }).error ?? "Request failed");
   }
   return data as T;
