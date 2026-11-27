@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { USER_WALLET_LIMIT } from "@/lib/config";
 import {
   api,
   WALLET_TYPE_LABEL,
@@ -8,6 +9,7 @@ import {
   type Wallet,
   type WalletTotals,
   type WalletType,
+  type Role,
 } from "@/lib/client";
 import { formatPeso } from "@/lib/money";
 import { longDayLabel, todayKey, ymdFromISO } from "@/lib/date";
@@ -58,6 +60,7 @@ export default function WalletsPage() {
   const today = todayKey();
 
   const [wallets, setWallets] = useState<Wallet[]>([]);
+  const [role, setRole] = useState<Role>("USER");
   const [totals, setTotals] = useState<WalletTotals>({
     totalCents: 0,
     walletCount: 0,
@@ -95,15 +98,17 @@ export default function WalletsPage() {
   const load = useCallback(async () => {
     setError("");
     try {
-      const [w, t] = await Promise.all([
+      const [w, t, me] = await Promise.all([
         api.get<{ wallets: Wallet[]; totals: WalletTotals }>(
           "/api/wallets?includeArchived=1",
         ),
         api.get<{ transfers: Transfer[] }>("/api/transfers"),
+        api.get<{ user: { role: Role } }>("/api/me"),
       ]);
       setWallets(w.wallets);
       setTotals(w.totals);
       setTransfers(t.transfers);
+      setRole(me.user.role);
 
       // Seed the transfer form with sensible wallets the first time.
       const active = w.wallets.filter((x) => !x.archived);
@@ -127,9 +132,13 @@ export default function WalletsPage() {
   const active = useMemo(() => wallets.filter((w) => !w.archived), [wallets]);
   const archived = useMemo(() => wallets.filter((w) => w.archived), [wallets]);
 
+  // Only live wallets count towards the cap; admins are exempt.
+  const atLimit = role !== "ADMIN" && active.length >= USER_WALLET_LIMIT;
+
   /* ── Wallet CRUD ── */
 
   function openCreate() {
+    if (atLimit) return;
     setEditingWalletId(null);
     setWalletForm(emptyWallet());
     setWalletError("");
@@ -318,11 +327,44 @@ export default function WalletsPage() {
         </div>
         <button
           onClick={openCreate}
-          className="rounded-lg bg-brand px-3 py-2 text-sm font-semibold text-white transition hover:bg-brand-dark"
+          disabled={atLimit}
+          title={
+            atLimit
+              ? "Limit reached — archive a wallet you no longer use first"
+              : undefined
+          }
+          className="rounded-lg bg-brand px-3 py-2 text-sm font-semibold text-white transition hover:bg-brand-dark disabled:cursor-not-allowed disabled:opacity-50"
         >
           + Add wallet
         </button>
       </div>
+
+      {role !== "ADMIN" && (
+        <div
+          className={`rounded-2xl border px-4 py-3 text-sm ${
+            atLimit
+              ? "border-amber-300 bg-amber-50 text-amber-900"
+              : "border-slate-200 bg-surface text-slate-500"
+          }`}
+        >
+          <strong className="text-slate-700">
+            {active.length} of {USER_WALLET_LIMIT}
+          </strong>{" "}
+          wallets used.{" "}
+          {atLimit ? (
+            <>
+              You have reached the limit — archive one you no longer use and the
+              slot frees up straight away. Archiving keeps all its history.
+            </>
+          ) : (
+            <>
+              {USER_WALLET_LIMIT - active.length} slot
+              {USER_WALLET_LIMIT - active.length === 1 ? "" : "s"} left.
+              Archived wallets do not count towards this.
+            </>
+          )}
+        </div>
+      )}
 
       {error && (
         <div className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">

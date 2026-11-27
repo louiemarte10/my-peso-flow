@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, getCurrentUserRecord } from "@/lib/auth";
 import { badRequest, unauthorized } from "@/lib/api";
 import { pesosToCents } from "@/lib/money";
 import { walletSummaries } from "@/lib/wallets";
 import { checkLogo } from "@/lib/logo";
 import { logActivity } from "@/lib/activity";
+import { USER_WALLET_LIMIT } from "@/lib/config";
 import type { WalletType } from "@/generated/prisma/client";
 
 const TYPES = ["BANK", "EWALLET", "CASH", "SAVINGS", "CREDIT"] as const;
@@ -52,6 +53,22 @@ export async function POST(req: NextRequest) {
 
   const name = String(body.name ?? "").trim();
   if (!name) return badRequest("Enter a wallet name");
+
+  // Plain accounts are capped; admins are not. The role is read from the
+  // database rather than the cookie, so a stale session cannot lift the cap.
+  // Archived wallets are excluded: archiving one frees a slot immediately.
+  const me = await getCurrentUserRecord();
+  if (me && me.role !== "ADMIN") {
+    const live = await prisma.wallet.count({
+      where: { userId: user.sub, archivedAt: null },
+    });
+    if (live >= USER_WALLET_LIMIT) {
+      return badRequest(
+        `You already have ${live} of ${USER_WALLET_LIMIT} wallets. ` +
+          `Archive one you no longer use, then add this.`,
+      );
+    }
+  }
 
   const type = parseType(body.type);
   if (!type) return badRequest("Choose a wallet type");

@@ -16,6 +16,16 @@ export const EMAIL_TAKEN =
  */
 export const USER_CATEGORY_LIMIT = 15;
 
+/**
+ * How many LIVE wallets a plain USER may keep. Same rule as categories:
+ * archived wallets don't count, so archiving one you no longer use frees a
+ * slot straight away. Admins are not capped.
+ *
+ * The starter set (see DEFAULT_WALLETS) is far smaller than this, so a new
+ * account has plenty of room before it ever meets the limit.
+ */
+export const USER_WALLET_LIMIT = 15;
+
 /** Self sign-up is on unless ALLOW_SIGNUP is explicitly "false". */
 export function signupEnabled(): boolean {
   return process.env.ALLOW_SIGNUP !== "false";
