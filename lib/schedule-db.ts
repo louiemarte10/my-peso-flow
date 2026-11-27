@@ -235,17 +235,33 @@ export async function checkTargets(
 export async function postDueEntries(
   userId?: string,
   now = new Date(),
-): Promise<{ posted: number; failed: number }> {
+): Promise<{ posted: number; failed: number; healed: number }> {
+  // Rows approved back when approving encoded on the spot already have their
+  // entry, and would otherwise be encoded a second time now that APPROVED
+  // means "waiting". An entryId is proof the money exists, so mark them
+  // POSTED and leave the ledger alone. Cheap, and it heals itself on the
+  // first run rather than needing anyone to remember.
+  const healed = await prisma.scheduledEntry.updateMany({
+    where: {
+      status: "APPROVED",
+      entryId: { not: null },
+      ...(userId ? { userId } : {}),
+    },
+    data: { status: "POSTED" },
+  });
+
   const due = await prisma.scheduledEntry.findMany({
     where: {
       status: "APPROVED",
+      // Belt and braces: never touch a row that already produced an entry.
+      entryId: null,
       date: { lte: postCutoff(now) },
       ...(userId ? { userId } : {}),
     },
     orderBy: { date: "asc" },
     take: 500,
   });
-  if (due.length === 0) return { posted: 0, failed: 0 };
+  if (due.length === 0) return { posted: 0, failed: 0, healed: healed.count };
 
   // One lookup per person rather than per row, for the activity line.
   const people = new Map<string, { id: string; name: string; email: string }>();
@@ -301,5 +317,5 @@ export async function postDueEntries(
     }
   }
 
-  return { posted, failed };
+  return { posted, failed, healed: healed.count };
 }

@@ -343,7 +343,7 @@ export type ScheduleState = {
   wallets: WalletRef[];
   today: string;
   generated?: { created: number; refreshed: number };
-  posted?: { posted: number; failed: number };
+  posted?: { posted: number; failed: number; healed: number };
   result?: {
     done: number;
     failed: string[];
