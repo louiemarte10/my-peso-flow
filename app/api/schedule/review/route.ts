@@ -5,7 +5,8 @@ import { badRequest, unauthorized } from "@/lib/api";
 import { formatPeso } from "@/lib/money";
 import { manilaDayKey, longDayLabel } from "@/lib/date";
 import { logActivity } from "@/lib/activity";
-import { checkTargets, loadSchedule } from "@/lib/schedule-db";
+import { POST_HOUR_LABEL } from "@/lib/schedule";
+import { checkTargets, loadSchedule, postDueEntries } from "@/lib/schedule-db";
 
 type Action = "approve" | "skip" | "restore";
 
@@ -16,14 +17,18 @@ function parseAction(raw: unknown): Action | null {
 /**
  * POST /api/schedule/review — act on the rows you ticked.
  *
- *   approve  the proposal becomes a real ledger entry
+ *   approve  arm the row: it posts by itself at 4pm on its own date
  *   skip     not this time; the row stays as history and never comes back
- *   restore  put a skipped row back on the table
+ *   restore  put a skipped — or an armed, not yet posted — row back on the table
  *
- * Approving is the ONLY path from a proposal to money, it only ever touches
- * ids that were sent, and each one is written in a transaction with the row it
- * came from — so a proposal can never be marked approved without its entry
- * existing, nor an entry created twice from the same row.
+ * Approving deliberately does NOT create an entry. It records that you said
+ * yes; postDueEntries is what turns an armed row into money, and only once
+ * 4pm Manila on its date has actually arrived. A row already POSTED is
+ * finished here: it is an ordinary ledger entry and is edited on the Earnings
+ * or Expenses page like any other.
+ *
+ * Everything an approval will need later is checked now, while you are still
+ * looking at it — an armed row that cannot post is worse than a rejected one.
  */
 export async function POST(req: NextRequest) {
   const user = await getCurrentUser();
@@ -45,16 +50,22 @@ export async function POST(req: NextRequest) {
   if (ids.length === 0) return badRequest("Tick at least one row first");
   if (ids.length > 200) return badRequest("That is too many rows at once");
 
-  const wanted = action === "restore" ? "SKIPPED" : "PENDING";
+  const wanted =
+    action === "restore"
+      ? (["SKIPPED", "APPROVED"] as const)
+      : (["PENDING"] as const);
+
   const rows = await prisma.scheduledEntry.findMany({
-    where: { id: { in: ids }, userId: user.sub, status: wanted },
+    where: { id: { in: ids }, userId: user.sub, status: { in: [...wanted] } },
     include: { category: { select: { name: true } } },
     orderBy: { date: "asc" },
   });
 
   if (rows.length === 0) {
     return badRequest(
-      "Those rows have already been dealt with. Reload to see where they stand.",
+      action === "restore"
+        ? "Those have already posted — change them on the Earnings or Expenses page instead."
+        : "Those rows have already been dealt with. Reload to see where they stand.",
     );
   }
 
@@ -62,7 +73,10 @@ export async function POST(req: NextRequest) {
   if (action !== "approve") {
     await prisma.scheduledEntry.updateMany({
       where: { id: { in: rows.map((r) => r.id) }, userId: user.sub },
-      data: { status: action === "skip" ? "SKIPPED" : "PENDING" },
+      data: {
+        status: action === "skip" ? "SKIPPED" : "PENDING",
+        approvedAt: action === "skip" ? undefined : null,
+      },
     });
 
     await logActivity(user, {
@@ -70,7 +84,7 @@ export async function POST(req: NextRequest) {
       summary:
         action === "skip"
           ? `Skipped ${rows.length} scheduled row${rows.length === 1 ? "" : "s"} without encoding ${rows.length === 1 ? "it" : "them"}`
-          : `Put ${rows.length} skipped scheduled row${rows.length === 1 ? "" : "s"} back for review`,
+          : `Took ${rows.length} scheduled row${rows.length === 1 ? "" : "s"} back off the schedule, before ${rows.length === 1 ? "it" : "they"} posted`,
       targetType: "ScheduledEntry",
     });
 
@@ -80,21 +94,22 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // ---- approve ------------------------------------------------------------
+  // ---- approve: arm the row, do not encode it ----------------------------
   const failed: string[] = [];
+  const ready: string[] = [];
   let earningsCents = 0;
   let expenseCents = 0;
-  let done = 0;
 
   for (const row of rows) {
     const label = `${longDayLabel(manilaDayKey(row.date))} · ${formatPeso(row.amountCents)}`;
 
+    // Checked now rather than at posting time: at 4pm nobody is watching, so
+    // a row that would be refused must never get as far as being armed.
     const problem = await checkTargets(user.sub, {
       kind: row.kind,
       categoryId: row.categoryId,
       walletId: row.walletId,
       note: row.note,
-      // Approving writes to the ledger, so it answers to the ledger's rules.
       requireDetail: true,
     });
     if (problem) {
@@ -102,49 +117,39 @@ export async function POST(req: NextRequest) {
       continue;
     }
 
-    try {
-      await prisma.$transaction(async (tx) => {
-        const entry = await tx.entry.create({
-          data: {
-            userId: user.sub,
-            kind: row.kind,
-            date: row.date,
-            amountCents: row.amountCents,
-            note: row.note,
-            categoryId: row.categoryId,
-            walletId: row.walletId,
-          },
-        });
-        await tx.scheduledEntry.update({
-          where: { id: row.id },
-          data: {
-            status: "APPROVED",
-            approvedAt: new Date(),
-            entryId: entry.id,
-          },
-        });
-      });
-      done += 1;
-      if (row.kind === "EARNING") earningsCents += row.amountCents;
-      else expenseCents += row.amountCents;
-    } catch {
-      failed.push(`${label} — could not be encoded, try it on its own`);
-    }
+    ready.push(row.id);
+    if (row.kind === "EARNING") earningsCents += row.amountCents;
+    else expenseCents += row.amountCents;
   }
 
-  if (done > 0) {
+  if (ready.length > 0) {
+    await prisma.scheduledEntry.updateMany({
+      where: { id: { in: ready }, userId: user.sub, status: "PENDING" },
+      data: { status: "APPROVED", approvedAt: new Date() },
+    });
+
     await logActivity(user, {
       action: "schedule.approve",
       summary:
-        `Approved ${done} scheduled row${done === 1 ? "" : "s"} into the ledger` +
+        `Scheduled ${ready.length} entr${ready.length === 1 ? "y" : "ies"} to post at ${POST_HOUR_LABEL} on ${ready.length === 1 ? "its date" : "their dates"}` +
         (earningsCents ? ` — ${formatPeso(earningsCents)} in` : "") +
         (expenseCents ? `${earningsCents ? "," : " —"} ${formatPeso(expenseCents)} out` : ""),
       targetType: "ScheduledEntry",
     });
   }
 
+  // A date that has already gone by posts straight away rather than sitting
+  // armed until the next nightly run.
+  const posted = await postDueEntries(user.sub);
+
   return NextResponse.json({
     ...(await loadSchedule(user.sub)),
-    result: { done, failed, earningsCents, expenseCents },
+    result: {
+      done: ready.length,
+      failed,
+      earningsCents,
+      expenseCents,
+      postedNow: posted.posted,
+    },
   });
 }

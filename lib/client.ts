@@ -269,9 +269,16 @@ export const WALLET_TYPE_LABEL: Record<WalletType, string> = {
   CREDIT: "Credit",
 };
 
-// ---- Recurring entries -----------------------------------------------------
+// ---- Schedule Peso -----------------------------------------------------
 
-export type ScheduleStatus = "PENDING" | "APPROVED" | "SKIPPED";
+export type ScheduleStatus =
+  /** Waiting for you to look it over. */
+  | "PENDING"
+  /** You said yes — but it is not money yet. It posts at 4pm on its date. */
+  | "APPROVED"
+  /** The date came and it is in the ledger now. */
+  | "POSTED"
+  | "SKIPPED";
 
 export type CategoryRef = { id: string; name: string; color: string | null };
 
@@ -284,6 +291,8 @@ export type ScheduleRule = {
   daysOfMonth: number[];
   note: string | null;
   active: boolean;
+  /** On: comes round every month. Off: happens once and then stops. */
+  repeatMonthly: boolean;
   categoryId: string | null;
   category: CategoryRef | null;
   walletId: string | null;
@@ -301,6 +310,8 @@ export type ScheduledEntry = {
   status: ScheduleStatus;
   edited: boolean;
   approvedAt: string | null;
+  /** When it actually became a ledger entry. Null until 4pm on its date. */
+  postedAt: string | null;
   entryId: string | null;
   ruleId: string | null;
   rule: { id: string; name: string } | null;
@@ -319,19 +330,26 @@ export type SchedulePickerCategory = {
   requiresDetail: boolean;
 };
 
-/** The whole Recurring page in one payload — every route answers with this. */
+/** The whole Schedule Peso page in one payload — every route answers with this. */
 export type ScheduleState = {
   rules: ScheduleRule[];
+  /** Waiting to be looked over. */
   pending: ScheduledEntry[];
+  /** Armed and counting down to 4pm on their own dates. */
+  approved: ScheduledEntry[];
+  /** Already posted or skipped — the tail end of the story. */
   recent: ScheduledEntry[];
   categories: SchedulePickerCategory[];
   wallets: WalletRef[];
   today: string;
   generated?: { created: number; refreshed: number };
+  posted?: { posted: number; failed: number };
   result?: {
     done: number;
     failed: string[];
     earningsCents?: number;
     expenseCents?: number;
+    /** Rows whose 4pm had already gone, so they posted straight away. */
+    postedNow?: number;
   };
 };

@@ -102,6 +102,9 @@ export async function POST(req: NextRequest) {
   const days = parseDaysOfMonth(body.daysOfMonth);
   if (!days.ok) return badRequest(days.error);
 
+  // Repeating is the normal case, so anything but an explicit false means on.
+  const repeatMonthly = body.repeatMonthly !== false;
+
   const note = body.note ? String(body.note).trim() || null : null;
   const categoryId = body.categoryId ? String(body.categoryId) : null;
   const walletId = body.walletId ? String(body.walletId) : null;
@@ -121,6 +124,7 @@ export async function POST(req: NextRequest) {
       kind,
       amountCents: pesosToCents(amount),
       daysOfMonth: days.days,
+      repeatMonthly,
       note,
       categoryId,
       walletId,
@@ -129,7 +133,10 @@ export async function POST(req: NextRequest) {
 
   await logActivity(user, {
     action: "schedule.rule.create",
-    summary: `Added a recurring ${kind === "EARNING" ? "earning" : "expense"} rule "${name}" — ${formatPeso(rule.amountCents)} on ${describeDays(days.days)}`,
+    summary:
+      `Added a ${repeatMonthly ? "repeating" : "one-off"} scheduled ` +
+      `${kind === "EARNING" ? "earning" : "expense"} "${name}" — ` +
+      `${formatPeso(rule.amountCents)} on ${describeDays(days.days)}`,
     targetType: "ScheduleRule",
     targetId: rule.id,
   });

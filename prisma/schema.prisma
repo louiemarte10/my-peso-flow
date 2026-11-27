@@ -22,11 +22,17 @@ enum EntryKind {
   EXPENSE
 }
 
-/// Where a proposed entry stands in the review queue. PENDING rows are not
-/// money yet — they exist only so you can look them over first.
+/// Where a proposed entry stands.
+///
+/// PENDING  waiting for you to look it over
+/// APPROVED you said yes, but it is NOT money yet — it posts at 4pm Manila
+///          on its own date, not a moment before
+/// POSTED   the date came, the entry is in the ledger
+/// SKIPPED  not this time
 enum ScheduleStatus {
   PENDING
   APPROVED
+  POSTED
   SKIPPED
 }
 
@@ -231,6 +237,9 @@ model ScheduleRule {
   note        String?
   /// Off means it stops proposing, without losing the rule or its history.
   active      Boolean   @default(true)
+  /// On: this comes round every month, for as long as the rule lives.
+  /// Off: it happens once, on its next date, and then proposes nothing more.
+  repeatMonthly Boolean @default(true)
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -260,11 +269,15 @@ model ScheduledEntry {
   amountCents Int
   note        String?
   status      ScheduleStatus @default(PENDING)
+  /// When this actually became a ledger entry — 4pm Manila on its own date,
+  /// never at the moment you approved it.
+  postedAt    DateTime?
   /// True once you change something on the row by hand. Regenerating then
   /// leaves it alone instead of overwriting your edit with the rule's values.
   edited      Boolean        @default(false)
   approvedAt  DateTime?
-  /// The ledger entry this became once approved. Null while pending.
+  /// The ledger entry this became once it posted. Null until then — an
+  /// approved row that has not reached its date has no entry anywhere.
   entryId     String?
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt

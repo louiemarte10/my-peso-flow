@@ -1,4 +1,4 @@
-// Recurring entries — the rules, and the dates they fall on.
+// Schedule Peso — the rules, and the dates they fall on.
 //
 // Everything here is a pure function with no database and no clock of its own:
 // the caller passes the Manila day in. That keeps the server and the browser
@@ -16,6 +16,36 @@ export const MAX_SCHEDULE_RULES = 20;
 
 /** How many months ahead generating looks, counting the current one. */
 export const GENERATE_MONTHS = 2;
+
+/**
+ * The hour a scheduled entry actually posts, in Manila time.
+ *
+ * Approving does NOT encode anything: it arms the row. It becomes a real
+ * earning or expense at 4pm on its own date and not a moment before, so the
+ * ledger reads the way the month actually happened rather than the way it was
+ * planned a fortnight earlier.
+ */
+export const POST_HOUR_MANILA = 16;
+export const POST_HOUR_LABEL = "4:00 PM";
+const POST_OFFSET_MS = POST_HOUR_MANILA * 60 * 60 * 1000;
+
+/**
+ * The instant a row posts. `date` is 00:00 Manila stored as UTC, so adding the
+ * hour gives 4pm Manila on that same calendar day wherever this runs.
+ */
+export function postMomentUTC(date: Date | string): Date {
+  return new Date(new Date(date).getTime() + POST_OFFSET_MS);
+}
+
+/** Everything due at or before now is ready to post. */
+export function isDueToPost(date: Date | string, now = new Date()): boolean {
+  return postMomentUTC(date).getTime() <= now.getTime();
+}
+
+/** The cutoff for a query: a row posts once its `date` is at or before this. */
+export function postCutoff(now = new Date()): Date {
+  return new Date(now.getTime() - POST_OFFSET_MS);
+}
 
 /** "1st", "2nd", "3rd", "5th", "21st"… */
 export function ordinal(n: number): string {
@@ -79,15 +109,24 @@ export function monthsToGenerate(
   return keys;
 }
 
-/** Every date a rule proposes across the generation window. */
+/**
+ * Every date a rule proposes across the generation window.
+ *
+ * A rule that does not repeat is a one-off: it offers the next date that has
+ * not gone yet, and nothing after it.
+ */
 export function datesForRule(
   daysOfMonth: number[],
   todayYmd: string,
-  count = GENERATE_MONTHS,
+  opts: { repeatMonthly?: boolean; count?: number } = {},
 ): string[] {
-  return monthsToGenerate(todayYmd, count).flatMap((mk) =>
+  const { repeatMonthly = true, count = GENERATE_MONTHS } = opts;
+  const all = monthsToGenerate(todayYmd, count).flatMap((mk) =>
     datesForMonth(daysOfMonth, mk),
   );
+  if (repeatMonthly) return all;
+  const next = all.find((ymd) => ymd >= todayYmd);
+  return next ? [next] : [];
 }
 
 /**

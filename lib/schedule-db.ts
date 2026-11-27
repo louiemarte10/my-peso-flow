@@ -9,8 +9,10 @@
 import "server-only";
 import { prisma } from "./db";
 import { LIVE } from "./archive";
-import { manilaDayStartUTC, todayKey } from "./date";
-import { datesForRule } from "./schedule";
+import { manilaDayStartUTC, longDayLabel, manilaDayKey, todayKey } from "./date";
+import { formatPeso } from "./money";
+import { logActivityFor } from "./activity";
+import { POST_HOUR_LABEL, datesForRule, postCutoff } from "./schedule";
 
 export const RULE_INCLUDE = {
   category: { select: { id: true, name: true, color: true } },
@@ -25,14 +27,14 @@ export const QUEUE_INCLUDE = {
 } as const;
 
 /**
- * Everything the Recurring page needs, in one request: the rules, the queue,
+ * Everything the Schedule Peso page needs, in one request: the rules, the queue,
  * and the categories and wallets its dropdowns offer.
  *
  * Every mutating route answers with this same shape, so the page replaces its
  * state wholesale after any change and can never drift from the server.
  */
 export async function loadSchedule(userId: string) {
-  const [rules, pending, recent, categories, wallets] = await Promise.all([
+  const [rules, pending, approved, recent, categories, wallets] = await Promise.all([
     prisma.scheduleRule.findMany({
       where: { userId },
       include: RULE_INCLUDE,
@@ -43,10 +45,16 @@ export async function loadSchedule(userId: string) {
       include: QUEUE_INCLUDE,
       orderBy: [{ date: "asc" }, { kind: "desc" }, { createdAt: "asc" }],
     }),
-    // A short tail of what has already been decided, so approving something
-    // is visibly reversible-looking rather than a row vanishing into nothing.
+    // Said yes to, but not money yet: these are waiting for 4pm on their own
+    // date. Soonest first, because that is the one you might still call off.
     prisma.scheduledEntry.findMany({
-      where: { userId, status: { in: ["APPROVED", "SKIPPED"] } },
+      where: { userId, status: "APPROVED" },
+      include: QUEUE_INCLUDE,
+      orderBy: [{ date: "asc" }, { createdAt: "asc" }],
+    }),
+    // A short tail of what has already happened or been passed over.
+    prisma.scheduledEntry.findMany({
+      where: { userId, status: { in: ["POSTED", "SKIPPED"] } },
       include: QUEUE_INCLUDE,
       orderBy: { updatedAt: "desc" },
       take: 20,
@@ -69,7 +77,15 @@ export async function loadSchedule(userId: string) {
     }),
   ]);
 
-  return { rules, pending, recent, categories, wallets, today: todayKey() };
+  return {
+    rules,
+    pending,
+    approved,
+    recent,
+    categories,
+    wallets,
+    today: todayKey(),
+  };
 }
 
 export type ScheduleState = Awaited<ReturnType<typeof loadSchedule>>;
@@ -96,6 +112,7 @@ export async function generateProposals(
       kind: true,
       amountCents: true,
       daysOfMonth: true,
+      repeatMonthly: true,
       note: true,
       categoryId: true,
       walletId: true,
@@ -106,8 +123,19 @@ export async function generateProposals(
   let refreshed = 0;
 
   for (const rule of rules) {
-    const dates = datesForRule(rule.daysOfMonth, todayYmd);
+    const dates = datesForRule(rule.daysOfMonth, todayYmd, {
+      repeatMonthly: rule.repeatMonthly,
+    });
     if (dates.length === 0) continue;
+
+    // A one-off that has already been proposed is done; it must not quietly
+    // offer itself again next month.
+    if (!rule.repeatMonthly) {
+      const already = await prisma.scheduledEntry.count({
+        where: { userId, ruleId: rule.id },
+      });
+      if (already > 0) continue;
+    }
 
     const res = await prisma.scheduledEntry.createMany({
       data: dates.map((ymd) => ({
@@ -184,4 +212,94 @@ export async function checkTargets(
   }
 
   return null;
+}
+
+/**
+ * Post every approved row whose moment has come: 4pm Manila on its own date.
+ *
+ * This is the step that actually creates money. Approving does not — it only
+ * arms the row — so a salary you approved on the 1st still shows up in the
+ * ledger on the 20th at 4pm, the way the month really went.
+ *
+ * Safe to call as often as anything likes:
+ *
+ *  - the cutoff means a row can never post early, no matter who calls it;
+ *  - each row is written in a transaction with the entry it creates, so a
+ *    proposal is never marked POSTED without its entry existing;
+ *  - the status moves PENDING → APPROVED → POSTED in one direction only, and
+ *    the query reads APPROVED rows, so calling it twice cannot double-encode.
+ *
+ * Pass a userId to catch up one person on page load; leave it out for the
+ * nightly run that does everyone.
+ */
+export async function postDueEntries(
+  userId?: string,
+  now = new Date(),
+): Promise<{ posted: number; failed: number }> {
+  const due = await prisma.scheduledEntry.findMany({
+    where: {
+      status: "APPROVED",
+      date: { lte: postCutoff(now) },
+      ...(userId ? { userId } : {}),
+    },
+    orderBy: { date: "asc" },
+    take: 500,
+  });
+  if (due.length === 0) return { posted: 0, failed: 0 };
+
+  // One lookup per person rather than per row, for the activity line.
+  const people = new Map<string, { id: string; name: string; email: string }>();
+  for (const row of due) {
+    if (people.has(row.userId)) continue;
+    const person = await prisma.user.findUnique({
+      where: { id: row.userId },
+      select: { id: true, name: true, email: true },
+    });
+    if (person) people.set(row.userId, person);
+  }
+
+  let posted = 0;
+  let failed = 0;
+
+  for (const row of due) {
+    try {
+      await prisma.$transaction(async (tx) => {
+        const entry = await tx.entry.create({
+          data: {
+            userId: row.userId,
+            kind: row.kind,
+            date: row.date,
+            amountCents: row.amountCents,
+            note: row.note,
+            categoryId: row.categoryId,
+            walletId: row.walletId,
+          },
+        });
+        await tx.scheduledEntry.update({
+          where: { id: row.id },
+          data: { status: "POSTED", postedAt: now, entryId: entry.id },
+        });
+      });
+      posted += 1;
+
+      const person = people.get(row.userId);
+      if (person) {
+        await logActivityFor(person, {
+          action:
+            row.kind === "EARNING" ? "schedule.post.earning" : "schedule.post.expense",
+          summary:
+            `Scheduled ${row.kind === "EARNING" ? "earning" : "expense"} of ` +
+            `${formatPeso(row.amountCents)} posted automatically at ` +
+            `${POST_HOUR_LABEL} on ${longDayLabel(manilaDayKey(row.date))}`,
+          targetType: "ScheduledEntry",
+          targetId: row.id,
+        });
+      }
+    } catch {
+      // Leave it APPROVED so the next run tries again rather than losing it.
+      failed += 1;
+    }
+  }
+
+  return { posted, failed };
 }

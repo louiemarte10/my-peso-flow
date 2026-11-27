@@ -39,6 +39,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     daysOfMonth?: number[];
     note?: string | null;
     active?: boolean;
+    repeatMonthly?: boolean;
     categoryId?: string | null;
     walletId?: string | null;
   } = {};
@@ -75,6 +76,9 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     data.note = body.note ? String(body.note).trim() || null : null;
   }
   if (body.active !== undefined) data.active = Boolean(body.active);
+  if (body.repeatMonthly !== undefined) {
+    data.repeatMonthly = Boolean(body.repeatMonthly);
+  }
   if (body.categoryId !== undefined) {
     data.categoryId = body.categoryId ? String(body.categoryId) : null;
   }

@@ -20,7 +20,9 @@ import {
 } from "@/lib/client";
 import { centsToPesos, formatPeso } from "@/lib/money";
 import {
+  DAY_MS,
   longDayLabel,
+  manilaDayStartUTC,
   monthLabel,
   shortDayLabel,
   todayKey,
@@ -28,8 +30,10 @@ import {
 } from "@/lib/date";
 import {
   MAX_SCHEDULE_RULES,
+  POST_HOUR_LABEL,
   describeDays,
   parseDaysOfMonth,
+  postMomentUTC,
   shortMonthWarning,
 } from "@/lib/schedule";
 import { Skeleton } from "@/components/Skeleton";
@@ -87,6 +91,14 @@ export default function SchedulePage() {
           ? await api.post<ScheduleState>("/api/schedule/generate")
           : await api.get<ScheduleState>("/api/schedule");
         apply(res);
+        // Arriving after 4pm on a scheduled date is how most people will see
+        // this happen, so say it plainly rather than letting rows move silently.
+        if (res.posted && res.posted.posted > 0) {
+          const n = res.posted.posted;
+          setNotice(
+            `${n} scheduled ${n === 1 ? "entry" : "entries"} reached ${POST_HOUR_LABEL} and ${n === 1 ? "is" : "are"} now in your ledger.`,
+          );
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Could not load");
       } finally {
@@ -180,15 +192,20 @@ export default function SchedulePage() {
         if (r.earningsCents) parts.push(`${formatPeso(r.earningsCents)} in`);
         if (r.expenseCents) parts.push(`${formatPeso(r.expenseCents)} out`);
         if (r.done > 0) {
+          const now = r.postedNow ?? 0;
           setNotice(
-            `Encoded ${r.done} ${r.done === 1 ? "entry" : "entries"}${parts.length ? ` — ${parts.join(", ")}` : ""}. They are in your ledger now.`,
+            `Scheduled ${r.done} ${r.done === 1 ? "entry" : "entries"}${parts.length ? ` — ${parts.join(", ")}` : ""}. ` +
+              `Nothing is encoded yet: each one posts at ${POST_HOUR_LABEL} on its own date.` +
+              (now > 0
+                ? ` ${now} whose date had already gone went straight into your ledger.`
+                : ""),
           );
         }
       } else if (r.done > 0) {
         setNotice(
           action === "skip"
             ? `Skipped ${r.done} ${r.done === 1 ? "row" : "rows"} — nothing was encoded.`
-            : `Put ${r.done} ${r.done === 1 ? "row" : "rows"} back on the table.`,
+            : `Put ${r.done} ${r.done === 1 ? "row" : "rows"} back on the table. ${r.done === 1 ? "It" : "They"} will not post.`,
         );
       }
       if (r.failed.length) setFailures(r.failed);
@@ -308,14 +325,17 @@ export default function SchedulePage() {
       />
 
       <div>
-        <h1 className="text-xl font-bold text-slate-800">Recurring</h1>
+        <h1 className="text-xl font-bold text-slate-800">Schedule Peso</h1>
         <p className="mt-1 max-w-[80ch] text-sm text-slate-500">
           The money that moves on the same days every month — payday, the
           allowance, what you set aside for family. Set a rule once and this
-          page works out the dates and <strong>puts them in the table below
-          for you to check</strong>. Nothing reaches your earnings or expenses
-          until you tick it and press Approve, so you can change an amount, a
-          date or a category first — or skip a month entirely.
+          page works out the dates and{" "}
+          <strong>puts them in the table below for you to check</strong>.
+          Approving does not encode anything either: it schedules the row, and
+          it becomes a real earning or expense at{" "}
+          <strong>{POST_HOUR_LABEL} on its own date</strong> — so your ledger
+          reads the way the month actually happened, not the way you planned it
+          a fortnight early.
         </p>
       </div>
 
@@ -353,7 +373,7 @@ export default function SchedulePage() {
             <p className="mt-0.5 text-xs text-slate-400">
               {pending.length === 0
                 ? "Nothing waiting."
-                : `${pending.length} proposed ${pending.length === 1 ? "row" : "rows"} — ${formatPeso(queueTotals.earnings)} in, ${formatPeso(queueTotals.expense)} out if you approve them all.`}
+                : `${pending.length} proposed ${pending.length === 1 ? "row" : "rows"} — ${formatPeso(queueTotals.earnings)} in, ${formatPeso(queueTotals.expense)} out if you schedule them all.`}
             </p>
           </div>
           <button
@@ -640,7 +660,7 @@ export default function SchedulePage() {
           <div className="sticky bottom-0 flex flex-wrap items-center gap-3 rounded-b-2xl border-t border-slate-200 bg-ice/90 px-5 py-3 backdrop-blur">
             <p className="text-xs text-slate-500">
               {selected.length === 0 ? (
-                "Tick the rows you want encoded."
+                `Tick the rows to schedule. They post at ${POST_HOUR_LABEL} on their dates.`
               ) : (
                 <>
                   <strong className="text-slate-700">
@@ -680,12 +700,81 @@ export default function SchedulePage() {
                 disabled={busy || selected.length === 0}
                 className="rounded-lg bg-brand px-4 py-2 text-xs font-semibold text-white shadow transition hover:bg-brand-dark disabled:opacity-40"
               >
-                {busy ? "Working…" : `Approve ${selected.length || ""}`.trim()}
+                {busy
+                  ? "Working…"
+                  : `Approve & schedule ${selected.length || ""}`.trim()}
               </button>
             </div>
           </div>
         )}
       </section>
+
+      {/* ---- scheduled, not yet posted --------------------------------- */}
+      {(state?.approved.length ?? 0) > 0 && (
+        <section className="rounded-2xl border border-brand/40 bg-surface p-5 shadow-sm">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="text-sm font-bold text-slate-700">
+              Scheduled — waiting for the date
+            </h2>
+            <span className="text-xs font-semibold text-brand">
+              {state!.approved.length} queued
+            </span>
+          </div>
+          <p className="mt-0.5 text-xs text-slate-400">
+            Approved, but not money yet. Each one posts by itself at{" "}
+            {POST_HOUR_LABEL} on the date shown. Take it off the schedule any
+            time before then and nothing is encoded.
+          </p>
+
+          <ul className="mt-3 space-y-2">
+            {state!.approved.map((row) => {
+              const ymd = ymdFromISO(row.date);
+              return (
+                <li
+                  key={row.id}
+                  className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 p-3 text-sm"
+                >
+                  <KindBadge kind={row.kind} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-semibold text-slate-700">
+                      {row.category?.name ?? "No category"}
+                      {row.note ? (
+                        <span className="font-normal text-slate-400">
+                          {" "}
+                          · {row.note}
+                        </span>
+                      ) : null}
+                    </p>
+                    <p className="text-xs text-slate-500">
+                      Posts {POST_HOUR_LABEL} on {longDayLabel(ymd)} ·{" "}
+                      <span className="font-medium text-brand">
+                        {countdownLabel(ymd, today)}
+                      </span>
+                      {row.rule ? ` · ${row.rule.name}` : ""}
+                    </p>
+                  </div>
+                  <span
+                    className={`font-semibold tabular-nums ${
+                      row.kind === "EARNING" ? "text-income" : "text-outflow"
+                    }`}
+                  >
+                    {row.kind === "EARNING" ? "+" : "−"}
+                    {formatPeso(row.amountCents)}
+                  </span>
+                  <button
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => review("restore", [row.id])}
+                    disabled={busy}
+                    className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-semibold text-slate-500 transition hover:border-outflow hover:text-outflow disabled:opacity-50"
+                  >
+                    Take off schedule
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
 
       {/* ---- the rules ------------------------------------------------- */}
       <section className="rounded-2xl border border-slate-200 bg-surface p-5 shadow-sm">
@@ -693,8 +782,9 @@ export default function SchedulePage() {
           <div>
             <h2 className="text-sm font-bold text-slate-700">My rules</h2>
             <p className="mt-0.5 text-xs text-slate-400">
-              {rules.length} of {MAX_SCHEDULE_RULES}. A rule only ever proposes
-              — it never encodes anything by itself.
+              {rules.length} of {MAX_SCHEDULE_RULES}. A rule only ever
+              proposes — what it proposes still waits for your approval, and
+              then for {POST_HOUR_LABEL} on the day.
             </p>
           </div>
           {rules.length < MAX_SCHEDULE_RULES && (
@@ -802,7 +892,13 @@ export default function SchedulePage() {
       {/* ---- what has been decided ------------------------------------- */}
       {(state?.recent.length ?? 0) > 0 && (
         <section className="rounded-2xl border border-slate-200 bg-surface p-5 shadow-sm">
-          <h2 className="text-sm font-bold text-slate-700">Recently decided</h2>
+          <h2 className="text-sm font-bold text-slate-700">
+            Already done
+          </h2>
+          <p className="mt-0.5 text-xs text-slate-400">
+            Posted entries are ordinary ledger rows now — change them on the
+            Earnings or Expenses page.
+          </p>
           <ul className="mt-3 space-y-2">
             {state!.recent.map((row) => (
               <li
@@ -811,12 +907,12 @@ export default function SchedulePage() {
               >
                 <span
                   className={`rounded px-1.5 py-0.5 text-[11px] font-bold uppercase ${
-                    row.status === "APPROVED"
+                    row.status === "POSTED"
                       ? "bg-income/15 text-income"
                       : "bg-slate-100 text-slate-500"
                   }`}
                 >
-                  {row.status === "APPROVED" ? "encoded" : "skipped"}
+                  {row.status === "POSTED" ? "posted" : "skipped"}
                 </span>
                 <span className="text-slate-600">
                   {longDayLabel(ymdFromISO(row.date))}
@@ -859,6 +955,25 @@ export default function SchedulePage() {
 }
 
 // ---- small shared pieces ---------------------------------------------------
+
+/**
+ * How far off a scheduled row is, in words.
+ *
+ * Read against the posting moment rather than midnight, so a row due today is
+ * only "posting now" once 4pm has genuinely passed.
+ */
+function countdownLabel(ymd: string, todayYmd: string): string {
+  if (postMomentUTC(manilaDayStartUTC(ymd)).getTime() <= Date.now()) {
+    return "posting now";
+  }
+  const days = Math.round(
+    (manilaDayStartUTC(ymd).getTime() - manilaDayStartUTC(todayYmd).getTime()) /
+      DAY_MS,
+  );
+  if (days <= 0) return "later today";
+  if (days === 1) return "tomorrow";
+  return `in ${days} days`;
+}
 
 function KindBadge({ kind }: { kind: EntryKind }) {
   return (
@@ -943,6 +1058,7 @@ type RuleBody = {
   categoryId?: string | null;
   walletId?: string | null;
   active?: boolean;
+  repeatMonthly?: boolean;
 };
 
 function RuleRow({
@@ -1002,10 +1118,15 @@ function RuleRow({
               paused
             </span>
           )}
+          {!rule.repeatMonthly && (
+            <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-500">
+              one-off
+            </span>
+          )}
         </p>
         <p className="text-xs text-slate-500">
-          {formatPeso(rule.amountCents)} on {describeDays(rule.daysOfMonth)} of
-          every month
+          {formatPeso(rule.amountCents)} on {describeDays(rule.daysOfMonth)}
+          {rule.repeatMonthly ? " of every month" : ", once only"}
           {rule.category ? ` · ${rule.category.name}` : " · no category yet"}
           {rule.wallet ? ` · ${rule.wallet.name}` : ""}
         </p>
@@ -1074,6 +1195,9 @@ function RuleForm({
   const [categoryId, setCategoryId] = useState(initial?.categoryId ?? "");
   const [walletId, setWalletId] = useState(initial?.walletId ?? "");
   const [note, setNote] = useState(initial?.note ?? "");
+  const [repeatMonthly, setRepeatMonthly] = useState(
+    initial ? initial.repeatMonthly : true,
+  );
   const [problem, setProblem] = useState("");
 
   const parsed = parseDaysOfMonth(days);
@@ -1095,6 +1219,7 @@ function RuleForm({
         kind,
         amount: value,
         daysOfMonth: parsed.days,
+        repeatMonthly,
         note: note.trim() || null,
         categoryId: categoryId || null,
         walletId: walletId || null,
@@ -1183,6 +1308,23 @@ function RuleForm({
           placeholder="Hatag kay Aizel"
           className={`${INPUT} mt-1 font-normal`}
         />
+      </label>
+
+      <label className="flex items-start gap-2 rounded-xl border border-slate-200 p-3">
+        <input
+          type="checkbox"
+          checked={repeatMonthly}
+          onChange={(e) => setRepeatMonthly(e.target.checked)}
+          className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-[var(--color-brand)]"
+        />
+        <span className="text-xs text-slate-500">
+          <strong className="block text-sm font-semibold text-slate-700">
+            Repeat every month
+          </strong>
+          {repeatMonthly
+            ? `This comes round every month — ${preview ?? "on the days above"} — for as long as the rule exists.`
+            : "One time only. It proposes its next date and then stops, instead of coming back next month."}
+        </span>
       </label>
 
       {warning && <p className="text-xs text-amber-600">{warning}</p>}

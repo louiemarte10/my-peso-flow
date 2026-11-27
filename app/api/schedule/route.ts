@@ -4,7 +4,7 @@ import { unauthorized } from "@/lib/api";
 import { loadSchedule } from "@/lib/schedule-db";
 
 /**
- * GET /api/schedule — the whole Recurring workflow for the signed-in person:
+ * GET /api/schedule — the whole Schedule Peso workflow for the signed-in person:
  * their rules, what is waiting for review, and what was recently decided.
  *
  * Scoped to the session's own id, never to anything from the query string, so
