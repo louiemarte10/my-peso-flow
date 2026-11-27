@@ -132,7 +132,11 @@ export default function DashboardPage() {
 
       {/* ── Monthly limits ── */}
       {!loading && data && (
-        <LimitsCard limits={data.limits ?? []} todayYmd={today} />
+        <LimitsCard
+          limits={data.limits ?? []}
+          todayYmd={today}
+          monthEarningsCents={data.month.earningsCents}
+        />
       )}
 
       {/* ── All-time balance ── */}

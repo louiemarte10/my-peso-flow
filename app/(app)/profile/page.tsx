@@ -322,7 +322,11 @@ export default function ProfilePage() {
       </div>
 
       {/* ── Monthly limits ── */}
-      <LimitsCard limits={limits} todayYmd={todayKey()} />
+      <LimitsCard
+        limits={limits}
+        todayYmd={todayKey()}
+        monthEarningsCents={money.month.earningsCents}
+      />
 
       {/* ── Wallets ───────────────────────────────────────────────────── */}
       <div className="rounded-2xl border border-slate-200 bg-surface p-5 shadow-sm">
