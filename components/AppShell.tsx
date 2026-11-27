@@ -70,7 +70,7 @@ export default function AppShell({
   const items = NAV.filter((n) => !n.admin || user.role === "ADMIN");
 
   const nav = (
-    <nav className="flex flex-1 flex-col gap-1 p-3">
+    <nav className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-3">
       {items.map((item) => {
         const active =
           pathname === item.href || pathname.startsWith(`${item.href}/`);
@@ -103,7 +103,7 @@ export default function AppShell({
 
   const sidebarInner = (
     <>
-      <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-4">
+      <div className="flex shrink-0 items-center gap-3 border-b border-slate-100 px-5 py-4">
         <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand text-xl text-white">
           ₱
         </span>
@@ -117,7 +117,7 @@ export default function AppShell({
 
       {nav}
 
-      <div className="border-t border-slate-100 p-3">
+      <div className="shrink-0 border-t border-slate-100 p-3">
         <ThemeToggle />
         <div ref={menuRef} className="relative">
           {menuOpen && (

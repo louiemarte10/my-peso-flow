@@ -152,6 +152,7 @@ export default function ProfilePage() {
       {/* ── Who you are ───────────────────────────────────────────────── */}
       <div className="rounded-2xl border border-slate-200 bg-surface p-5 shadow-sm">
         <div className="flex flex-wrap items-center gap-4">
+          <div className="flex min-w-0 flex-1 basis-full items-center gap-4 sm:basis-auto">
           <span className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-brand-light text-xl font-bold text-brand-dark">
             {account.imageUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
@@ -167,7 +168,7 @@ export default function ProfilePage() {
 
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-xl font-bold text-slate-800">
+              <h1 className="truncate text-xl font-bold text-slate-800">
                 {account.name}
               </h1>
               <span
@@ -191,10 +192,11 @@ export default function ProfilePage() {
               )}
             </p>
           </div>
+          </div>
 
           <Link
             href="/settings"
-            className="rounded-lg border border-slate-300 bg-surface px-3 py-2 text-sm font-semibold text-slate-700 transition hover:border-brand hover:text-brand-dark"
+            className="w-full rounded-lg border border-slate-300 bg-surface px-3 py-2 text-center text-sm font-semibold text-slate-700 transition hover:border-brand hover:text-brand-dark sm:w-auto"
           >
             Edit account
           </Link>
