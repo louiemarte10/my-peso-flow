@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { api, type Role } from "@/lib/client";
@@ -32,6 +32,32 @@ export default function AppShell({
   const pathname = usePathname();
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Close the account menu on a click elsewhere or on Escape, the way every
+  // other menu on the web behaves.
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onDown(e: MouseEvent) {
+      if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setMenuOpen(false);
+    }
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menuOpen]);
+
+  // A move to another page should not leave the menu hanging open.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMenuOpen(false);
+  }, [pathname]);
 
   async function logout() {
     await api.post("/api/auth/logout");
@@ -93,35 +119,71 @@ export default function AppShell({
 
       <div className="border-t border-slate-100 p-3">
         <ThemeToggle />
-        <div className="mb-2 flex items-center gap-2 px-1">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-brand-light text-xs font-bold text-brand-dark">
-            {user.image ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={user.image}
-                alt=""
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              initials || "?"
-            )}
-          </span>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-slate-700">
-              {user.name}
-            </p>
-            <p className="truncate text-xs text-slate-400">
-              {user.role === "ADMIN" ? "Admin · " : ""}
-              {user.email}
-            </p>
-          </div>
+        <div ref={menuRef} className="relative">
+          {menuOpen && (
+            <div className="absolute bottom-full left-0 z-20 mb-2 w-full overflow-hidden rounded-xl border border-slate-200 bg-surface shadow-lg">
+              <Link
+                href="/profile"
+                onClick={() => setMenuOpen(false)}
+                className="flex items-center gap-2 px-3 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-ice"
+              >
+                <span aria-hidden>🙋</span> My Profile
+              </Link>
+              <Link
+                href="/settings"
+                onClick={() => setMenuOpen(false)}
+                className="flex items-center gap-2 border-t border-slate-100 px-3 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-ice"
+              >
+                <span aria-hidden>⚙️</span> Account settings
+              </Link>
+              <button
+                onClick={logout}
+                className="flex w-full items-center gap-2 border-t border-slate-100 px-3 py-2.5 text-left text-sm font-medium text-outflow transition hover:bg-ice"
+              >
+                <span aria-hidden>↪</span> Sign out
+              </button>
+            </div>
+          )}
+
+          <button
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-expanded={menuOpen}
+            aria-haspopup="menu"
+            className={`flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left transition hover:bg-ice ${
+              menuOpen ? "bg-ice" : ""
+            }`}
+          >
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-brand-light text-xs font-bold text-brand-dark">
+              {user.image ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={user.image}
+                  alt=""
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                initials || "?"
+              )}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-sm font-semibold text-slate-700">
+                {user.name}
+              </span>
+              <span className="block truncate text-xs text-slate-400">
+                {user.role === "ADMIN" ? "Admin · " : ""}
+                {user.email}
+              </span>
+            </span>
+            <span
+              aria-hidden
+              className={`shrink-0 text-xs text-slate-400 transition-transform ${
+                menuOpen ? "rotate-180" : ""
+              }`}
+            >
+              ▲
+            </span>
+          </button>
         </div>
-        <button
-          onClick={logout}
-          className="w-full rounded-lg bg-slate-100 px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-200"
-        >
-          Sign out
-        </button>
       </div>
     </>
   );
