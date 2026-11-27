@@ -21,6 +21,7 @@ import ConfirmModal, { type ConfirmState } from "@/components/ConfirmModal";
 import { SkeletonRows } from "@/components/Skeleton";
 import WalletAvatar from "@/components/WalletAvatar";
 import BudgetBar, { budgetState } from "@/components/BudgetBar";
+import { limitReminder } from "@/lib/reminder";
 
 type FormState = {
   date: string;
@@ -348,6 +349,23 @@ export default function EntryManager({
             {limitCents !== null && (
               <div className="mt-2 rounded-lg border border-slate-200 bg-ice px-3 py-2">
                 <BudgetBar spentCents={spentCents} limitCents={limitCents} />
+                <p
+                  className={`mt-1.5 text-xs ${
+                    budgetState(spentCents, limitCents) === "over"
+                      ? "text-outflow"
+                      : budgetState(spentCents, limitCents) === "near"
+                        ? "text-amber-700"
+                        : "text-slate-500"
+                  }`}
+                >
+                  {
+                    limitReminder({
+                      spentCents,
+                      limitCents,
+                      todayYmd: today,
+                    }).text
+                  }
+                </p>
                 {pendingCents > 0 && (
                   <p
                     className={`mt-1.5 text-xs ${

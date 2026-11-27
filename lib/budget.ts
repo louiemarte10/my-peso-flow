@@ -8,20 +8,13 @@ import { prisma } from "./db";
 import { LIVE } from "./archive";
 import { manilaRangeUTC, monthStartKey, todayKey } from "./date";
 
-/** Amber from here on — close enough to be worth saying something. */
-export const NEAR_LIMIT_RATIO = 0.8;
-
-export type BudgetState = "none" | "ok" | "near" | "over";
-
-export function budgetState(
-  spentCents: number,
-  limitCents: number | null | undefined,
-): BudgetState {
-  if (!limitCents || limitCents <= 0) return "none";
-  if (spentCents > limitCents) return "over";
-  if (spentCents >= limitCents * NEAR_LIMIT_RATIO) return "near";
-  return "ok";
-}
+// The threshold rule lives in budget-state.ts so client components can use it
+// without dragging Prisma into the browser bundle.
+export {
+  NEAR_LIMIT_RATIO,
+  budgetState,
+  type BudgetState,
+} from "./budget-state";
 
 /**
  * What each category has cost so far this Manila month, keyed by category id.

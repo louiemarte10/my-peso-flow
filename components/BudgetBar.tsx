@@ -1,21 +1,10 @@
 "use client";
 
 import { formatPeso } from "@/lib/money";
+import { budgetState, type BudgetState } from "@/lib/budget-state";
 
-/** Amber from 80% of the limit — close enough to be worth saying something. */
-export const NEAR_LIMIT_RATIO = 0.8;
-
-export type BudgetState = "none" | "ok" | "near" | "over";
-
-export function budgetState(
-  spentCents: number,
-  limitCents: number | null | undefined,
-): BudgetState {
-  if (!limitCents || limitCents <= 0) return "none";
-  if (spentCents > limitCents) return "over";
-  if (spentCents >= limitCents * NEAR_LIMIT_RATIO) return "near";
-  return "ok";
-}
+export { budgetState, NEAR_LIMIT_RATIO } from "@/lib/budget-state";
+export type { BudgetState } from "@/lib/budget-state";
 
 const TONE: Record<Exclude<BudgetState, "none">, { bar: string; text: string }> =
   {

@@ -9,12 +9,13 @@ import {
   longDayLabel,
   monthLabel,
   relativeLabel,
+  todayKey,
   ymdFromISO,
 } from "@/lib/date";
 import { SESSION_IDLE_LABEL } from "@/lib/session-public";
 import { Skeleton } from "@/components/Skeleton";
 import WalletAvatar from "@/components/WalletAvatar";
-import BudgetBar, { budgetState } from "@/components/BudgetBar";
+import LimitsCard from "@/components/LimitsCard";
 
 type Profile = {
   account: {
@@ -140,12 +141,6 @@ export default function ProfilePage() {
 
   const { account, counts, money, habits, wallets, recentActivity } = data;
   const limits = data.limits ?? [];
-  const overLimit = limits.filter(
-    (l) => budgetState(l.spentCents, l.limitCents) === "over",
-  );
-  const nearLimit = limits.filter(
-    (l) => budgetState(l.spentCents, l.limitCents) === "near",
-  );
 
   const initials = account.name
     .split(" ")
@@ -326,62 +321,8 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* ── Monthly limits ────────────────────────────────────────────── */}
-      <div className="rounded-2xl border border-slate-200 bg-surface p-5 shadow-sm">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-sm font-bold text-slate-700">
-            This month&apos;s limits
-          </h2>
-          {limits.length > 0 && (
-            <span
-              className={`text-xs font-semibold ${
-                overLimit.length
-                  ? "text-outflow"
-                  : nearLimit.length
-                    ? "text-amber-700"
-                    : "text-income"
-              }`}
-            >
-              {overLimit.length
-                ? `${overLimit.length} over budget`
-                : nearLimit.length
-                  ? `${nearLimit.length} close to the limit`
-                  : "All within budget"}
-            </span>
-          )}
-        </div>
-
-        {limits.length === 0 ? (
-          <p className="mt-3 text-sm text-slate-400">
-            No limits set yet. Put a monthly cap on a category — cigarettes,
-            beer, softdrinks — on the{" "}
-            <Link href="/categories" className="text-brand hover:underline">
-              Categories
-            </Link>{" "}
-            page, and you will see where you stand here and every time you
-            encode.
-          </p>
-        ) : (
-          <ul className="mt-3 space-y-3">
-            {limits.map((l) => (
-              <li key={l.id}>
-                <div className="flex items-center gap-1.5 text-sm">
-                  <span
-                    className="h-2 w-2 shrink-0 rounded-full"
-                    style={{ background: l.color ?? "#64748B" }}
-                  />
-                  <span className="truncate text-slate-700">{l.name}</span>
-                </div>
-                <BudgetBar
-                  spentCents={l.spentCents}
-                  limitCents={l.limitCents}
-                  className="mt-1"
-                />
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+      {/* ── Monthly limits ── */}
+      <LimitsCard limits={limits} todayYmd={todayKey()} />
 
       {/* ── Wallets ───────────────────────────────────────────────────── */}
       <div className="rounded-2xl border border-slate-200 bg-surface p-5 shadow-sm">

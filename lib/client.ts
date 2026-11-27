@@ -179,7 +179,17 @@ export type CategorySlice = {
   amountCents: number;
 };
 
+/** One expense category's monthly cap, with the month's spend against it. */
+export type CategoryLimit = {
+  id: string;
+  name: string;
+  color: string | null;
+  limitCents: number;
+  spentCents: number;
+};
+
 export type DashboardData = {
+  limits?: CategoryLimit[];
   today: Totals & { key: string; label: string };
   last7: Totals & { from: string; to: string };
   month: Totals & { key: string; label: string };

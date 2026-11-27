@@ -5,6 +5,9 @@ import { api, type Category, type EntryKind, type Role } from "@/lib/client";
 import { USER_CATEGORY_LIMIT } from "@/lib/config";
 import ConfirmModal, { type ConfirmState } from "@/components/ConfirmModal";
 import BudgetBar from "@/components/BudgetBar";
+import { budgetState } from "@/lib/budget-state";
+import { limitReminder } from "@/lib/reminder";
+import { todayKey } from "@/lib/date";
 import { formatPeso } from "@/lib/money";
 import { Skeleton } from "@/components/Skeleton";
 
@@ -191,8 +194,16 @@ export default function CategoriesPage() {
   );
 }
 
+const NOTE_TONE: Record<string, string> = {
+  over: "text-outflow",
+  near: "text-amber-700",
+  ok: "text-slate-500",
+  none: "text-slate-400",
+};
+
 /**
- * The monthly cap for one expense category: where you stand, and a way to
+ * The monthly cap for one expense category: where you stand, the note that
+ * says what it means with the month's remaining days counted in, and a way to
  * change it. Nothing is blocked when you go over — the number is the point.
  */
 function LimitRow({
@@ -285,7 +296,7 @@ function LimitRow({
   }
 
   return (
-    <div className="mt-1.5 flex items-center gap-3 pl-8">
+    <div className="mt-1.5 flex items-start gap-3 pl-8">
       {limit === null ? (
         <button
           onClick={open}
@@ -295,11 +306,18 @@ function LimitRow({
         </button>
       ) : (
         <>
-          <BudgetBar
-            spentCents={spent}
-            limitCents={limit}
-            className="min-w-0 flex-1"
-          />
+          <div className="min-w-0 flex-1">
+            <BudgetBar spentCents={spent} limitCents={limit} />
+            <p className={`mt-1 text-xs ${NOTE_TONE[budgetState(spent, limit)]}`}>
+              {
+                limitReminder({
+                  spentCents: spent,
+                  limitCents: limit,
+                  todayYmd: todayKey(),
+                }).text
+              }
+            </p>
+          </div>
           <button
             onClick={open}
             className="shrink-0 text-xs font-semibold text-brand transition hover:underline"

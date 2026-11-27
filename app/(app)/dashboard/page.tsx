@@ -15,6 +15,7 @@ import {
 import StatCard from "@/components/StatCard";
 import WalletCard from "@/components/WalletCard";
 import FlowChart from "@/components/FlowChart";
+import LimitsCard from "@/components/LimitsCard";
 import { Skeleton, SkeletonCards } from "@/components/Skeleton";
 
 type View = "7d" | "month" | "year";
@@ -128,6 +129,11 @@ export default function DashboardPage() {
           </>
         )}
       </div>
+
+      {/* ── Monthly limits ── */}
+      {!loading && data && (
+        <LimitsCard limits={data.limits ?? []} todayYmd={today} />
+      )}
 
       {/* ── All-time balance ── */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">

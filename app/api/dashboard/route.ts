@@ -4,6 +4,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { unauthorized } from "@/lib/api";
 import { walletSummaries } from "@/lib/wallets";
 import { LIVE } from "@/lib/archive";
+import { monthSpendByCategory } from "@/lib/budget";
 import {
   addDaysKey,
   addMonths,
@@ -228,7 +229,29 @@ export async function GET(req: NextRequest) {
       .sort((a, b) => b.amountCents - a.amountCents)
       .slice(0, 6);
 
+  // Categories with a monthly cap, and what they have cost so far this month.
+  const [limitRows, limitSpend] = await Promise.all([
+    prisma.category.findMany({
+      where: {
+        userId: user.sub,
+        kind: "EXPENSE",
+        archivedAt: null,
+        monthlyLimitCents: { not: null },
+      },
+      select: { id: true, name: true, color: true, monthlyLimitCents: true },
+    }),
+    monthSpendByCategory(user.sub),
+  ]);
+  const limits = limitRows.map((c) => ({
+    id: c.id,
+    name: c.name,
+    color: c.color,
+    limitCents: c.monthlyLimitCents as number,
+    spentCents: limitSpend.get(c.id) ?? 0,
+  }));
+
   return NextResponse.json({
+    limits,
     today: { ...todayTotals, key: today, label: longDayLabel(today) },
     last7: { ...last7Totals, from: last7From, to: today },
     month: {
