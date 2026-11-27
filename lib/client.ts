@@ -268,3 +268,70 @@ export const WALLET_TYPE_LABEL: Record<WalletType, string> = {
   SAVINGS: "Savings",
   CREDIT: "Credit",
 };
+
+// ---- Recurring entries -----------------------------------------------------
+
+export type ScheduleStatus = "PENDING" | "APPROVED" | "SKIPPED";
+
+export type CategoryRef = { id: string; name: string; color: string | null };
+
+/** A repeating entry: "every 5th and 20th, ₱3,000 to Hatag Aizel". */
+export type ScheduleRule = {
+  id: string;
+  name: string;
+  kind: EntryKind;
+  amountCents: number;
+  daysOfMonth: number[];
+  note: string | null;
+  active: boolean;
+  categoryId: string | null;
+  category: CategoryRef | null;
+  walletId: string | null;
+  wallet: WalletRef | null;
+  createdAt: string;
+};
+
+/** One proposed date waiting for your approval. Not money until you say so. */
+export type ScheduledEntry = {
+  id: string;
+  date: string;
+  kind: EntryKind;
+  amountCents: number;
+  note: string | null;
+  status: ScheduleStatus;
+  edited: boolean;
+  approvedAt: string | null;
+  entryId: string | null;
+  ruleId: string | null;
+  rule: { id: string; name: string } | null;
+  categoryId: string | null;
+  category: CategoryRef | null;
+  walletId: string | null;
+  wallet: WalletRef | null;
+  createdAt: string;
+};
+
+export type SchedulePickerCategory = {
+  id: string;
+  name: string;
+  kind: EntryKind;
+  color: string | null;
+  requiresDetail: boolean;
+};
+
+/** The whole Recurring page in one payload — every route answers with this. */
+export type ScheduleState = {
+  rules: ScheduleRule[];
+  pending: ScheduledEntry[];
+  recent: ScheduledEntry[];
+  categories: SchedulePickerCategory[];
+  wallets: WalletRef[];
+  today: string;
+  generated?: { created: number; refreshed: number };
+  result?: {
+    done: number;
+    failed: string[];
+    earningsCents?: number;
+    expenseCents?: number;
+  };
+};

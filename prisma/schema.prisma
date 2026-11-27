@@ -22,6 +22,14 @@ enum EntryKind {
   EXPENSE
 }
 
+/// Where a proposed entry stands in the review queue. PENDING rows are not
+/// money yet — they exist only so you can look them over first.
+enum ScheduleStatus {
+  PENDING
+  APPROVED
+  SKIPPED
+}
+
 enum WalletType {
   BANK // Security Bank, BPI, GoTyme…
   EWALLET // GCash, Maya…
@@ -42,11 +50,13 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  categories Category[]
-  entries    Entry[]
-  wallets    Wallet[]
-  transfers  Transfer[]
-  activity   ActivityLog[]
+  categories    Category[]
+  entries       Entry[]
+  wallets       Wallet[]
+  transfers     Transfer[]
+  activity      ActivityLog[]
+  scheduleRules ScheduleRule[]
+  scheduled     ScheduledEntry[]
 }
 
 /// An append-only record of who did what, for the admin Activity page.
@@ -100,7 +110,9 @@ model Category {
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  entries Entry[]
+  entries       Entry[]
+  scheduleRules ScheduleRule[]
+  scheduled     ScheduledEntry[]
 
   @@unique([userId, kind, name])
   @@index([userId, kind])
@@ -134,6 +146,8 @@ model Wallet {
   entries       Entry[]
   transfersFrom Transfer[] @relation("TransferFrom")
   transfersTo   Transfer[] @relation("TransferTo")
+  scheduleRules ScheduleRule[]
+  scheduled     ScheduledEntry[]
 
   @@unique([userId, name])
   @@index([userId, archivedAt])
@@ -195,4 +209,82 @@ model Transfer {
   @@index([userId, fromWalletId])
   @@index([userId, toWalletId])
   @@index([userId, archivedAt])
+}
+
+/// A repeating entry you expect on fixed days of the month — "every 5th and
+/// 20th, ₱3,000 to Hatag Aizel".
+///
+/// A rule never writes to the ledger. All it does is PROPOSE: generating turns
+/// it into ScheduledEntry rows that sit in a review table until you approve
+/// them. That separation is the whole point — an app that quietly invents
+/// ₱3,000 expenses you never checked is worse than no app.
+model ScheduleRule {
+  id          String    @id @default(cuid())
+  name        String
+  kind        EntryKind
+  amountCents Int
+  /// Manila days of the month this falls on, e.g. [5, 20]. A 29–31 is clamped
+  /// to the last day of a short month, so February never skips a payday.
+  daysOfMonth Int[]
+  /// Copied onto every proposal it makes, so you can say what the money is for
+  /// once instead of on every occurrence.
+  note        String?
+  /// Off means it stops proposing, without losing the rule or its history.
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  walletId String?
+  wallet   Wallet? @relation(fields: [walletId], references: [id], onDelete: SetNull)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  occurrences ScheduledEntry[]
+
+  @@index([userId, active])
+}
+
+/// One proposed date from a rule, waiting in the review table.
+///
+/// Nothing here counts as money: it is absent from every total, balance and
+/// chart. Approving it is what creates the real Entry, and `entryId` points at
+/// the row it became so the two can never be confused for each other.
+model ScheduledEntry {
+  id          String         @id @default(cuid())
+  date        DateTime // 00:00 Manila for the calendar day, stored as UTC
+  kind        EntryKind
+  amountCents Int
+  note        String?
+  status      ScheduleStatus @default(PENDING)
+  /// True once you change something on the row by hand. Regenerating then
+  /// leaves it alone instead of overwriting your edit with the rule's values.
+  edited      Boolean        @default(false)
+  approvedAt  DateTime?
+  /// The ledger entry this became once approved. Null while pending.
+  entryId     String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  /// Null once the rule is deleted — the proposal and its history survive it.
+  ruleId String?
+  rule   ScheduleRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  walletId String?
+  wallet   Wallet? @relation(fields: [walletId], references: [id], onDelete: SetNull)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// One proposal per rule per day. Generating again is therefore safe to run
+  /// as often as you like — it can never duplicate a row you already have, and
+  /// a row you skipped stays skipped instead of coming back.
+  @@unique([ruleId, date])
+  @@index([userId, status, date])
 }

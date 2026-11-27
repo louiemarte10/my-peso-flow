@@ -14,6 +14,7 @@ const NAV: NavItem[] = [
   { href: "/earnings", label: "Earnings", icon: "💰" },
   { href: "/expenses", label: "Expenses", icon: "🧾" },
   { href: "/history", label: "All Transactions", icon: "📅" },
+  { href: "/schedule", label: "Recurring", icon: "🔁" },
   { href: "/categories", label: "Categories", icon: "🏷️" },
   { href: "/archived", label: "Archived", icon: "🗃️" },
   { href: "/users", label: "People", icon: "👥", admin: true },
