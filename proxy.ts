@@ -24,7 +24,11 @@ import {
  * through untouched and write their own fresh cookie, which slides the window
  * just the same.
  */
-function managesItsOwnSession(pathname: string): boolean {
+function managesItsOwnSession(req: NextRequest): boolean {
+  // Only the writes do: reading /api/me is ordinary activity and should slide
+  // the window like anything else.
+  if (req.method === "GET" || req.method === "HEAD") return false;
+  const { pathname } = req.nextUrl;
   return (
     pathname === "/api/me" ||
     /^\/api\/users\/[^/]+\/impersonate$/.test(pathname)
@@ -56,7 +60,7 @@ export async function proxy(req: NextRequest) {
     return redirect;
   }
 
-  if (managesItsOwnSession(pathname)) return NextResponse.next();
+  if (managesItsOwnSession(req)) return NextResponse.next();
 
   // Slide the window forward. Re-signing is a cheap HMAC, and doing it on
   // every request is what makes the timeout track real activity.
