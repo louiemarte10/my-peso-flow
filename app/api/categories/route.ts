@@ -7,6 +7,7 @@ import { shapeArchivable } from "@/lib/archive";
 import { USER_CATEGORY_LIMIT } from "@/lib/config";
 import { getCurrentUserRecord } from "@/lib/auth";
 import { logActivity } from "@/lib/activity";
+import { monthSpendByCategory, parseMonthlyLimit } from "@/lib/budget";
 
 function parseKind(raw: string | null): EntryKind | null {
   return raw === "EARNING" || raw === "EXPENSE" ? raw : null;
@@ -22,17 +23,25 @@ export async function GET(req: NextRequest) {
   const kind = parseKind(searchParams.get("kind"));
   const includeArchived = searchParams.get("includeArchived") === "1";
 
-  const categories = await prisma.category.findMany({
-    where: {
-      userId: user.sub,
-      ...(kind ? { kind } : {}),
-      ...(includeArchived ? {} : { archivedAt: null }),
-    },
-    include: { _count: { select: { entries: true } } },
-    orderBy: [{ kind: "asc" }, { name: "asc" }],
-  });
+  const [categories, spend] = await Promise.all([
+    prisma.category.findMany({
+      where: {
+        userId: user.sub,
+        ...(kind ? { kind } : {}),
+        ...(includeArchived ? {} : { archivedAt: null }),
+      },
+      include: { _count: { select: { entries: true } } },
+      orderBy: [{ kind: "asc" }, { name: "asc" }],
+    }),
+    monthSpendByCategory(user.sub),
+  ]);
 
-  return NextResponse.json({ categories: categories.map(shapeArchivable) });
+  return NextResponse.json({
+    categories: categories.map((c) => ({
+      ...shapeArchivable(c),
+      spentThisMonthCents: spend.get(c.id) ?? 0,
+    })),
+  });
 }
 
 /** POST /api/categories */
@@ -76,8 +85,19 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  const limit = parseMonthlyLimit(body.monthlyLimit);
+  if (!limit.ok) return badRequest(limit.error);
+
   const category = await prisma.category.create({
-    data: { userId: user.sub, kind, name, color, requiresDetail },
+    data: {
+      userId: user.sub,
+      kind,
+      name,
+      color,
+      requiresDetail,
+      // An earning has nothing to cap, so a limit is only kept on expenses.
+      monthlyLimitCents: kind === "EXPENSE" ? limit.cents : null,
+    },
     include: { _count: { select: { entries: true } } },
   });
 
@@ -88,5 +108,8 @@ export async function POST(req: NextRequest) {
     targetId: category.id,
   });
 
-  return NextResponse.json({ category: shapeArchivable(category) }, { status: 201 });
+  return NextResponse.json(
+    { category: { ...shapeArchivable(category), spentThisMonthCents: 0 } },
+    { status: 201 },
+  );
 }

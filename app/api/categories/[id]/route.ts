@@ -4,6 +4,11 @@ import { getCurrentUser } from "@/lib/auth";
 import { badRequest, notFound, unauthorized } from "@/lib/api";
 import { shapeArchivable } from "@/lib/archive";
 import { logActivity } from "@/lib/activity";
+import {
+  monthSpendByCategory,
+  parseMonthlyLimit,
+} from "@/lib/budget";
+import { formatPeso } from "@/lib/money";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -30,6 +35,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     color?: string | null;
     archivedAt?: Date | null;
     requiresDetail?: boolean;
+    monthlyLimitCents?: number | null;
   } = {};
 
   if (body.name !== undefined) {
@@ -57,6 +63,14 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   if (body.requiresDetail !== undefined) {
     data.requiresDetail = Boolean(body.requiresDetail);
   }
+  if (body.monthlyLimit !== undefined) {
+    if (existing.kind !== "EXPENSE") {
+      return badRequest("Only expense categories can have a monthly limit");
+    }
+    const limit = parseMonthlyLimit(body.monthlyLimit);
+    if (!limit.ok) return badRequest(limit.error);
+    data.monthlyLimitCents = limit.cents;
+  }
 
   const category = await prisma.category.update({
     where: { id },
@@ -64,19 +78,45 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     include: { _count: { select: { entries: true } } },
   });
 
-  await logActivity(user, {
-    action: data.archivedAt === null && body.archived !== undefined
-      ? "category.restore"
-      : "category.update",
-    summary:
-      data.archivedAt === null && body.archived !== undefined
-        ? `Restored the category "${category.name}"`
-        : `Edited the category "${category.name}"`,
-    targetType: "Category",
-    targetId: category.id,
-  });
+  // A limit change is a decision, not a tidy-up, so it gets its own line
+  // rather than hiding behind "Edited the category".
+  if (data.monthlyLimitCents !== undefined) {
+    await logActivity(user, {
+      action: "category.limit",
+      summary:
+        data.monthlyLimitCents === null
+          ? `Removed the monthly limit on "${category.name}"`
+          : `Set a ${formatPeso(data.monthlyLimitCents)} monthly limit on "${category.name}"`,
+      targetType: "Category",
+      targetId: category.id,
+    });
+  }
 
-  return NextResponse.json({ category: shapeArchivable(category) });
+  // Everything else gets the ordinary line - but a limit-only change must not
+  // also log "Edited the category", or every budget tweak costs two rows.
+  const otherChange = Object.keys(data).some((k) => k !== "monthlyLimitCents");
+  if (otherChange) {
+    await logActivity(user, {
+      action:
+        data.archivedAt === null && body.archived !== undefined
+          ? "category.restore"
+          : "category.update",
+      summary:
+        data.archivedAt === null && body.archived !== undefined
+          ? `Restored the category "${category.name}"`
+          : `Edited the category "${category.name}"`,
+      targetType: "Category",
+      targetId: category.id,
+    });
+  }
+
+  const spend = await monthSpendByCategory(user.sub);
+  return NextResponse.json({
+    category: {
+      ...shapeArchivable(category),
+      spentThisMonthCents: spend.get(category.id) ?? 0,
+    },
+  });
 }
 
 /**

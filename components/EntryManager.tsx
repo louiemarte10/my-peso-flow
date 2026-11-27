@@ -20,6 +20,7 @@ import {
 import ConfirmModal, { type ConfirmState } from "@/components/ConfirmModal";
 import { SkeletonRows } from "@/components/Skeleton";
 import WalletAvatar from "@/components/WalletAvatar";
+import BudgetBar, { budgetState } from "@/components/BudgetBar";
 
 type FormState = {
   date: string;
@@ -86,6 +87,19 @@ export default function EntryManager({
 
   const selectedCategory = categories.find((c) => c.id === form.categoryId);
   const needsDetail = Boolean(selectedCategory?.requiresDetail);
+
+  // Where this category stands against its monthly limit, and where THIS entry
+  // would leave it. Shown before you save, which is the only moment the number
+  // can still change your mind. Editing an existing entry is excluded: its
+  // amount is already counted in the month's spend, so adding it again would
+  // double-count.
+  const limitCents = selectedCategory?.monthlyLimitCents ?? null;
+  const spentCents = selectedCategory?.spentThisMonthCents ?? 0;
+  const pendingCents = editingId
+    ? 0
+    : Math.round((parseFloat(form.amount) || 0) * 100);
+  const afterCents = spentCents + Math.max(0, pendingCents);
+  const limitState = budgetState(afterCents, limitCents);
 
   const lineTotalCents = Math.round(
     (parseFloat(qty) || 0) * (parseFloat(unitPrice) || 0) * 100,
@@ -324,9 +338,48 @@ export default function EntryManager({
               {categories.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
+                  {c.monthlyLimitCents
+                    ? ` — ${formatPeso(c.monthlyLimitCents)}/mo`
+                    : ""}
                 </option>
               ))}
             </select>
+
+            {limitCents !== null && (
+              <div className="mt-2 rounded-lg border border-slate-200 bg-ice px-3 py-2">
+                <BudgetBar spentCents={spentCents} limitCents={limitCents} />
+                {pendingCents > 0 && (
+                  <p
+                    className={`mt-1.5 text-xs ${
+                      limitState === "over"
+                        ? "font-semibold text-outflow"
+                        : limitState === "near"
+                          ? "font-semibold text-amber-700"
+                          : "text-slate-500"
+                    }`}
+                  >
+                    {limitState === "over" ? (
+                      <>
+                        This one puts you {formatPeso(afterCents - limitCents)}{" "}
+                        over your {formatPeso(limitCents)} limit. Nothing stops
+                        you — just so you know.
+                      </>
+                    ) : limitState === "near" ? (
+                      <>
+                        This one takes you to {formatPeso(afterCents)} —{" "}
+                        {formatPeso(limitCents - afterCents)} left for the rest
+                        of the month.
+                      </>
+                    ) : (
+                      <>
+                        After this: {formatPeso(afterCents)} of{" "}
+                        {formatPeso(limitCents)}.
+                      </>
+                    )}
+                  </p>
+                )}
+              </div>
+            )}
           </Field>
 
           <Field label={amountLabel}>

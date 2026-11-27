@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { api, type Category, type EntryKind, type Role } from "@/lib/client";
 import { USER_CATEGORY_LIMIT } from "@/lib/config";
 import ConfirmModal, { type ConfirmState } from "@/components/ConfirmModal";
+import BudgetBar from "@/components/BudgetBar";
+import { formatPeso } from "@/lib/money";
 import { Skeleton } from "@/components/Skeleton";
 
 const SWATCHES = [
@@ -18,6 +20,12 @@ const SWATCHES = [
   "#06B6D4",
   "#64748B",
 ];
+
+/**
+ * What a PATCH may carry. `monthlyLimit` is in pesos and is write-only: the
+ * API answers with monthlyLimitCents, so it is not part of Category itself.
+ */
+type CategoryPatch = Partial<Category> & { monthlyLimit?: number | null };
 
 export default function CategoriesPage() {
   const [categories, setCategories] = useState<Category[]>([]);
@@ -55,12 +63,15 @@ export default function CategoriesPage() {
     await load();
   }
 
-  async function update(id: string, patch: Partial<Category>) {
+  async function update(id: string, patch: CategoryPatch) {
     try {
       await api.patch(`/api/categories/${id}`, patch);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not update");
+      // Rethrown so an inline editor knows to stay open with its own message;
+      // the banner above is for the callers that do not catch.
+      throw err;
     }
   }
 
@@ -180,6 +191,128 @@ export default function CategoriesPage() {
   );
 }
 
+/**
+ * The monthly cap for one expense category: where you stand, and a way to
+ * change it. Nothing is blocked when you go over — the number is the point.
+ */
+function LimitRow({
+  category,
+  onUpdate,
+}: {
+  category: Category;
+  onUpdate: (id: string, patch: CategoryPatch) => Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const limit = category.monthlyLimitCents ?? null;
+  const spent = category.spentThisMonthCents ?? 0;
+
+  function open() {
+    setValue(limit ? String(limit / 100) : "");
+    setError("");
+    setEditing(true);
+  }
+
+  async function save(raw: string) {
+    setSaving(true);
+    setError("");
+    try {
+      // An empty box clears the limit, which is how you turn one off.
+      await onUpdate(category.id, {
+        monthlyLimit: raw.trim() === "" ? null : Number(raw),
+      });
+      setEditing(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not save");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <div className="mt-1.5 pl-8">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-xs text-slate-500">Monthly limit ₱</span>
+          <input
+            autoFocus
+            type="number"
+            min="0"
+            step="1"
+            inputMode="decimal"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") save(value);
+              if (e.key === "Escape") setEditing(false);
+            }}
+            placeholder="none"
+            className="w-28 rounded-lg border border-brand bg-surface px-2 py-1 text-sm tabular-nums text-slate-800 outline-none"
+          />
+          <button
+            onClick={() => save(value)}
+            disabled={saving}
+            className="rounded-md bg-brand px-2 py-1 text-xs font-semibold text-white transition hover:bg-brand-dark disabled:opacity-50"
+          >
+            Save
+          </button>
+          <button
+            onClick={() => setEditing(false)}
+            className="rounded-md px-2 py-1 text-xs font-semibold text-slate-500 transition hover:bg-ice"
+          >
+            Cancel
+          </button>
+          {limit !== null && (
+            <button
+              onClick={() => save("")}
+              disabled={saving}
+              className="rounded-md px-2 py-1 text-xs font-semibold text-outflow transition hover:bg-red-50"
+            >
+              Remove limit
+            </button>
+          )}
+        </div>
+        <p className="mt-1 text-xs text-slate-400">
+          Leave it empty for no limit. Nothing is ever blocked — you just get
+          told where you stand.
+        </p>
+        {error && <p className="mt-1 text-xs text-outflow">{error}</p>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-1.5 flex items-center gap-3 pl-8">
+      {limit === null ? (
+        <button
+          onClick={open}
+          className="text-xs font-semibold text-brand transition hover:underline"
+        >
+          + Set a monthly limit
+        </button>
+      ) : (
+        <>
+          <BudgetBar
+            spentCents={spent}
+            limitCents={limit}
+            className="min-w-0 flex-1"
+          />
+          <button
+            onClick={open}
+            className="shrink-0 text-xs font-semibold text-brand transition hover:underline"
+            title={`Change the ${formatPeso(limit)} monthly limit`}
+          >
+            Change
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
 function KindPanel({
   kind,
   title,
@@ -197,7 +330,7 @@ function KindPanel({
   /** True when this account has used up its category allowance. */
   atLimit: boolean;
   onCreate: (kind: EntryKind, name: string, color: string) => Promise<void>;
-  onUpdate: (id: string, patch: Partial<Category>) => Promise<void>;
+  onUpdate: (id: string, patch: CategoryPatch) => Promise<void>;
   onDelete: (c: Category) => void;
 }) {
   const [name, setName] = useState("");
@@ -229,7 +362,9 @@ function KindPanel({
   async function commitRename(c: Category) {
     const trimmed = editName.trim();
     setEditingId(null);
-    if (trimmed && trimmed !== c.name) await onUpdate(c.id, { name: trimmed });
+    if (trimmed && trimmed !== c.name) {
+      await onUpdate(c.id, { name: trimmed }).catch(() => {});
+    }
   }
 
   const active = categories.filter((c) => !c.archived);
@@ -295,11 +430,16 @@ function KindPanel({
               </li>
             )}
             {active.map((c) => (
-              <li key={c.id} className="flex items-center gap-2 py-2">
+              <li key={c.id} className="py-2">
+                <div className="flex items-center gap-2">
                 <input
                   type="color"
                   value={c.color ?? "#64748B"}
-                  onChange={(e) => onUpdate(c.id, { color: e.target.value })}
+                  onChange={(e) => {
+                    void onUpdate(c.id, { color: e.target.value }).catch(
+                      () => {},
+                    );
+                  }}
                   className="h-6 w-6 shrink-0 cursor-pointer rounded border-0 bg-transparent p-0"
                   aria-label={`Colour for ${c.name}`}
                 />
@@ -336,9 +476,11 @@ function KindPanel({
                   <input
                     type="checkbox"
                     checked={c.requiresDetail}
-                    onChange={(e) =>
-                      onUpdate(c.id, { requiresDetail: e.target.checked })
-                    }
+                    onChange={(e) => {
+                      void onUpdate(c.id, {
+                        requiresDetail: e.target.checked,
+                      }).catch(() => {});
+                    }}
                     className="h-3.5 w-3.5 accent-[var(--color-brand)]"
                   />
                   needs details
@@ -370,6 +512,11 @@ function KindPanel({
                 >
                   Archive
                 </button>
+                </div>
+
+                {kind === "EXPENSE" && (
+                  <LimitRow category={c} onUpdate={onUpdate} />
+                )}
               </li>
             ))}
           </ul>

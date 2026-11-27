@@ -52,6 +52,10 @@ export type Category = {
   archivedAt?: string | null;
   /** Catch-all category: the note is mandatory when encoding against it. */
   requiresDetail: boolean;
+  /** Monthly spending cap in centavos, or null for no limit. Expenses only. */
+  monthlyLimitCents?: number | null;
+  /** Spent against this category so far this Manila month, in centavos. */
+  spentThisMonthCents?: number;
   _count?: { entries: number };
 };
 

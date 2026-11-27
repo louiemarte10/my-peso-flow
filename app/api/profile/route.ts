@@ -5,6 +5,7 @@ import { unauthorized } from "@/lib/api";
 import { walletSummaries } from "@/lib/wallets";
 import { LIVE } from "@/lib/archive";
 import { USER_CATEGORY_LIMIT, USER_WALLET_LIMIT } from "@/lib/config";
+import { monthSpendByCategory } from "@/lib/budget";
 import {
   manilaDayKey,
   manilaRangeUTC,
@@ -52,7 +53,14 @@ export async function GET() {
     walletSummaries(id, { includeArchived: true }),
     prisma.category.findMany({
       where: { userId: id },
-      select: { id: true, kind: true, archivedAt: true },
+      select: {
+        id: true,
+        name: true,
+        color: true,
+        kind: true,
+        archivedAt: true,
+        monthlyLimitCents: true,
+      },
     }),
     prisma.entry.groupBy({
       by: ["kind"],
@@ -149,6 +157,23 @@ export async function GET() {
     ).map((c) => [c.id, c]),
   );
 
+  // Live expense categories that have a cap, with what they have cost so far
+  // this month. Over budget first, since that is what wants looking at.
+  const spend = await monthSpendByCategory(id);
+  const limits = categoryRows
+    .filter((c) => c.archivedAt === null && c.monthlyLimitCents)
+    .map((c) => ({
+      id: c.id,
+      name: c.name,
+      color: c.color,
+      limitCents: c.monthlyLimitCents as number,
+      spentCents: spend.get(c.id) ?? 0,
+    }))
+    .sort(
+      (a, b) =>
+        b.spentCents / b.limitCents - a.spentCents / a.limitCents,
+    );
+
   const firstDay = firstEntry ? manilaDayKey(firstEntry.date) : null;
   const daysTracking = firstDay
     ? Math.floor(
@@ -201,6 +226,7 @@ export async function GET() {
         daysEncoded: monthDays.size,
       },
     },
+    limits,
     habits: {
       firstEntry: firstDay,
       daysTracking,

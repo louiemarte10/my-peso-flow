@@ -90,6 +90,11 @@ model Category {
   /// this on makes the note mandatory when encoding against them — you have to
   /// write what it actually was.
   requiresDetail Boolean  @default(false)
+  /// Optional spending cap for one Manila calendar month, in centavos. Null
+  /// means no limit. Only meaningful on EXPENSE categories; an earning has
+  /// nothing to cap. Nothing is blocked when you go over — the app tells you
+  /// where you stand and leaves the decision to you.
+  monthlyLimitCents Int?
   createdAt      DateTime @default(now())
 
   userId String
