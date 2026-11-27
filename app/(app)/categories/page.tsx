@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api, type Category, type EntryKind, type Role } from "@/lib/client";
 import { USER_CATEGORY_LIMIT } from "@/lib/config";
 import ConfirmModal, { type ConfirmState } from "@/components/ConfirmModal";
@@ -357,6 +357,9 @@ function KindPanel({
   const [error, setError] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
+  // Guards against the rename being committed twice for one edit: see
+  // commitRename.
+  const committing = useRef(false);
 
   async function add() {
     const trimmed = name.trim();
@@ -377,11 +380,28 @@ function KindPanel({
     }
   }
 
+  /**
+   * Save the new name — once, whatever got us here.
+   *
+   * Both onBlur and the Save button call this, and a mouse fires blur before
+   * click. Without the guard the rename would save, the editor would close
+   * mid-click, the button under the cursor would already be "Edit" again, and
+   * that click would reopen the editor holding the OLD name — which the next
+   * save then wrote back over the new one. That was the "it reverts" bug.
+   */
   async function commitRename(c: Category) {
+    if (committing.current) return;
     const trimmed = editName.trim();
+    committing.current = true;
     setEditingId(null);
-    if (trimmed && trimmed !== c.name) {
-      await onUpdate(c.id, { name: trimmed }).catch(() => {});
+    try {
+      if (trimmed && trimmed !== c.name) {
+        await onUpdate(c.id, { name: trimmed });
+      }
+    } catch {
+      // The page already shows the error banner; nothing to add here.
+    } finally {
+      committing.current = false;
     }
   }
 
@@ -508,6 +528,10 @@ function KindPanel({
                 </span>
                 {editingId === c.id ? (
                   <button
+                    // Keep the focus in the input: without this the browser
+                    // blurs it on mousedown, the row re-renders, and this very
+                    // button has become "Edit" by the time the click lands.
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={() => commitRename(c)}
                     className="shrink-0 rounded-md bg-brand px-2 py-1 text-xs font-semibold text-white transition hover:bg-brand-dark"
                   >
